@@ -3,6 +3,7 @@ import {
   collection,
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -229,5 +230,47 @@ describe('tasks: changing', () => {
 
   it("another user cannot delete someone else's task", async () => {
     await assertFails(deleteDoc(doc(dbAs(env, 'bob'), aliceTask('open-task'))))
+  })
+})
+
+describe('tasks: sharing with a contact', () => {
+  /** `count` user ids, to fill a task's shared-with list up to and past its limit. */
+  const contactIds = (count: number) => Array.from({ length: count }, (_, index) => `contact-${index}`)
+
+  /** A task as the app writes it, but without the shared-with field at all. */
+  function withoutSharedWith(task: Record<string, unknown>) {
+    const rest = { ...task }
+    delete rest.sharedWith
+    return rest
+  }
+
+  it('a task can be created shared with 0 to 10 text ids, and nothing else is accepted', async () => {
+    const alice = dbAs(env, 'alice')
+    await assertSucceeds(setDoc(doc(alice, aliceTask('shared-none')), newTask('alice', { sharedWith: [] })))
+    await assertSucceeds(setDoc(doc(alice, aliceTask('shared-one')), newTask('alice', { sharedWith: ['bob'] })))
+    await assertSucceeds(setDoc(doc(alice, aliceTask('shared-ten')), newTask('alice', { sharedWith: contactIds(10) })))
+    await assertFails(setDoc(doc(alice, aliceTask('shared-eleven')), newTask('alice', { sharedWith: contactIds(11) })))
+    await assertFails(setDoc(doc(alice, aliceTask('shared-not-a-list')), newTask('alice', { sharedWith: 'bob' })))
+    await assertFails(setDoc(doc(alice, aliceTask('shared-not-text')), newTask('alice', { sharedWith: [1] })))
+    await assertFails(setDoc(doc(alice, aliceTask('shared-missing')), withoutSharedWith(newTask('alice'))))
+  })
+
+  it('the owner can share and unshare their task within the same limits, and another user cannot', async () => {
+    const alice = dbAs(env, 'alice')
+    await assertSucceeds(updateDoc(doc(alice, aliceTask('open-task')), { sharedWith: ['bob'] }))
+    await assertSucceeds(updateDoc(doc(alice, aliceTask('open-task')), { sharedWith: [] }))
+    await assertFails(updateDoc(doc(alice, aliceTask('open-task')), { sharedWith: contactIds(11) }))
+    await assertFails(updateDoc(doc(alice, aliceTask('open-task')), { sharedWith: 'bob' }))
+    await assertFails(updateDoc(doc(alice, aliceTask('open-task')), { sharedWith: [1] }))
+    await assertFails(updateDoc(doc(alice, aliceTask('open-task')), { sharedWith: deleteField() }))
+    await assertFails(updateDoc(doc(dbAs(env, 'bob'), aliceTask('open-task')), { sharedWith: ['bob'] }))
+  })
+
+  it('a contact a task is shared with still cannot read it', async () => {
+    await assertSucceeds(updateDoc(doc(dbAs(env, 'alice'), aliceTask('open-task')), { sharedWith: ['bob'] }))
+
+    const bob = dbAs(env, 'bob')
+    await assertFails(getDoc(doc(bob, aliceTask('open-task'))))
+    await assertFails(getDocs(query(collectionGroup(bob, 'tasks'), where('sharedWith', 'array-contains', 'bob'))))
   })
 })
