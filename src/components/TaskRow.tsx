@@ -42,6 +42,7 @@ const STATUS_STYLES: Record<TaskStatus, string> = {
   todo: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
   doing: 'bg-amber-100 text-amber-900 hover:bg-amber-200',
   done: 'bg-green-100 text-green-900 hover:bg-green-200',
+  postponed: 'bg-purple-100 text-purple-900 hover:bg-purple-200',
 }
 
 /** One task on the list page: its reorder handle, status button, details, and Edit and Delete. */
@@ -120,7 +121,7 @@ export function TaskRow({
         aria-label={`${label}: change status of ${task.title}`}
         onClick={() => void status.run(task, nextStatus(task.status))}
         disabled={status.pending}
-        className={`w-16 shrink-0 rounded px-2 py-1 text-xs font-medium disabled:opacity-50 ${STATUS_STYLES[task.status]}`}
+        className={`w-20 shrink-0 rounded px-2 py-1 text-xs font-medium disabled:opacity-50 ${STATUS_STYLES[task.status]}`}
       >
         {label}
       </button>

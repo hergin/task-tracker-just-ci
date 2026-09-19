@@ -1,7 +1,7 @@
 // The domain model. Firestore stores optional fields as null, never omitted.
 // Field limits are mirrored in firestore.rules: change both together.
 
-export const TASK_STATUSES = ['todo', 'doing', 'done'] as const
+export const TASK_STATUSES = ['todo', 'doing', 'done', 'postponed'] as const
 export type TaskStatus = (typeof TASK_STATUSES)[number]
 
 /** A calendar date, 'YYYY-MM-DD', with no time zone. */

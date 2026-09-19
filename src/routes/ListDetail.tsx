@@ -31,6 +31,7 @@ const STATUS_FILTER_OPTIONS: readonly { value: StatusFilter; label: string }[] =
   { value: 'todo', label: STATUS_LABELS.todo },
   { value: 'doing', label: STATUS_LABELS.doing },
   { value: 'done', label: STATUS_LABELS.done },
+  { value: 'postponed', label: STATUS_LABELS.postponed },
 ]
 
 /** `/lists/:listId`: the tasks in one list. Done tasks sit in a collapsed group at the bottom. */

@@ -43,10 +43,11 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 describe('nextStatus', () => {
-  it('cycles todo → doing → done → todo', () => {
+  it('cycles todo → doing → done → postponed → todo', () => {
     expect(nextStatus('todo')).toBe('doing')
     expect(nextStatus('doing')).toBe('done')
-    expect(nextStatus('done')).toBe('todo')
+    expect(nextStatus('done')).toBe('postponed')
+    expect(nextStatus('postponed')).toBe('todo')
   })
 })
 
@@ -60,6 +61,8 @@ describe('completedAtChange', () => {
     ['done', 'todo', 'clear'],
     ['done', 'doing', 'clear'],
     ['todo', 'doing', 'clear'],
+    ['done', 'postponed', 'clear'],
+    ['postponed', 'done', 'set'],
   ] as const)('%s → %s: %s', (from, to, expected) => {
     expect(completedAtChange(from, to)).toBe(expected)
   })

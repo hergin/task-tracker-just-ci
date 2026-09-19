@@ -95,7 +95,7 @@ service cloud.firestore {
           return hasExactly(data, ['ownerId', 'title', 'notes', 'status', 'dueDate', 'assigneeId', 'position', 'createdAt', 'completedAt', 'tags'])
             && isNonEmptyStringUpTo(data.title, 500)
             && isNullOrStringUpTo(data.notes, 5000)
-            && data.status in ['todo', 'doing', 'done']
+            && data.status in ['todo', 'doing', 'done', 'postponed']
             && (data.dueDate == null || (data.dueDate is string && data.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
             && (data.assigneeId == null || (data.assigneeId is string && exists(/databases/$(database)/documents/users/$(data.assigneeId))))
             && data.position is number

@@ -7,6 +7,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: 'To do',
   doing: 'Doing',
   done: 'Done',
+  postponed: 'Postponed',
 }
 
 /** A list page's status filter: one status, or `all` for every task. */
@@ -37,10 +38,11 @@ export function filterByTag<T extends Pick<Task, 'tags'>>(tasks: readonly T[], t
 const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
   todo: 'doing',
   doing: 'done',
-  done: 'todo',
+  done: 'postponed',
+  postponed: 'todo',
 }
 
-/** The status a task moves to when its status control is clicked: todo → doing → done → todo. */
+/** The status a task moves to when its status control is clicked: todo → doing → done → postponed → todo. */
 export function nextStatus(status: TaskStatus): TaskStatus {
   return NEXT_STATUS[status]
 }
