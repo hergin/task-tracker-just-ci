@@ -203,6 +203,26 @@ describe('tasks: changing', () => {
     await assertFails(updateDoc(doc(alice, aliceTask('open-task')), { tags: Array.from({ length: 11 }, (_, i) => `tag${i}`) }))
   })
 
+  it('postponed is a valid status, and other unknown statuses such as paused are still refused', async () => {
+    const alice = dbAs(env, 'alice')
+    await assertSucceeds(setDoc(doc(alice, aliceTask('postponed')), newTask('alice', { status: 'postponed' })))
+    await assertSucceeds(updateDoc(doc(alice, aliceTask('open-task')), { status: 'postponed' }))
+    await assertFails(setDoc(doc(alice, aliceTask('paused')), newTask('alice', { status: 'paused' })))
+    await assertFails(updateDoc(doc(alice, aliceTask('open-task')), { status: 'paused' }))
+  })
+
+  it('a postponed task has no completedAt: moving done to postponed clears it, postponed to done sets it anew', async () => {
+    const alice = dbAs(env, 'alice')
+    await assertSucceeds(updateDoc(doc(alice, aliceTask('done-task')), { status: 'postponed', completedAt: null }))
+    await assertFails(updateDoc(doc(alice, aliceTask('done-task')), { completedAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(alice, aliceTask('done-task')), { status: 'done' }))
+    await assertSucceeds(updateDoc(doc(alice, aliceTask('done-task')), { status: 'done', completedAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(alice, aliceTask('done-task')), { status: 'postponed' }))
+    await assertFails(
+      setDoc(doc(alice, aliceTask('new')), newTask('alice', { status: 'postponed', completedAt: serverTimestamp() })),
+    )
+  })
+
   it('the owner can delete their task', async () => {
     await assertSucceeds(deleteDoc(doc(dbAs(env, 'alice'), aliceTask('open-task'))))
   })
