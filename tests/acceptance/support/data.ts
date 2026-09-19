@@ -86,7 +86,9 @@ export async function createList(page: Page, name: string): Promise<void> {
  * status ("To do: change status of Buy milk"), so it changes with every click; the pattern is anchored at both ends.
  */
 export function statusButton(page: Page, title: string): Locator {
-  return page.getByRole('button', { name: new RegExp(`^(To do|Doing|Done): change status of ${escapeRegExp(title)}$`) })
+  return page.getByRole('button', {
+    name: new RegExp(`^(To do|Doing|Done|Postponed): change status of ${escapeRegExp(title)}$`),
+  })
 }
 
 function escapeRegExp(text: string): string {
