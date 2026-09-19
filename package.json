@@ -1,0 +1,46 @@
+{
+  "name": "seed-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-seed-app",
+    "seed": "tsx scripts/seed.ts",
+    "lint": "oxlint --deny-warnings",
+    "typecheck": "tsc -b",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:local": "tsx scripts/e2e-local.ts",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-seed-app \"vitest run --config vitest.rules.config.ts\"",
+    "verify": "npm run lint && npm run typecheck && npm run test:unit"
+  },
+  "dependencies": {
+    "firebase": "^12.19.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^7.18.3"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "firebase-admin": "^14.4.0",
+    "firebase-tools": "^15.30.0",
+    "oxlint": "^1.82.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,163 @@
+rules_version = '2';
+
+// Every rule here has tests in tests/rules/.
+// Optional fields are stored as null, never omitted. Field limits are mirrored in src/data/types.ts (LIMITS).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function hasExactly(data, keys) {
+      return data.keys().hasAll(keys) && data.keys().hasOnly(keys);
+    }
+
+    function isNonEmptyStringUpTo(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    function isNullOrStringUpTo(value, max) {
+      return value == null || (value is string && value.size() <= max);
+    }
+
+    function isValidTag(tag) {
+      return tag is string && tag.size() > 0 && tag.size() <= 50;
+    }
+
+    // Firestore rules can neither iterate a list nor recurse, so with at most 10 tags, check each index by hand.
+    function isValidTags(value) {
+      return value is list && value.size() <= 10
+        && (value.size() < 1 || isValidTag(value[0]))
+        && (value.size() < 2 || isValidTag(value[1]))
+        && (value.size() < 3 || isValidTag(value[2]))
+        && (value.size() < 4 || isValidTag(value[3]))
+        && (value.size() < 5 || isValidTag(value[4]))
+        && (value.size() < 6 || isValidTag(value[5]))
+        && (value.size() < 7 || isValidTag(value[6]))
+        && (value.size() < 8 || isValidTag(value[7]))
+        && (value.size() < 9 || isValidTag(value[8]))
+        && (value.size() < 10 || isValidTag(value[9]));
+    }
+
+    function unchanged(field) {
+      return request.resource.data[field] == resource.data[field];
+    }
+
+    // users/{userId}: public profile. Readable by every signed-in user (assignee picker); email stays in Firebase Auth.
+    match /users/{userId} {
+      function validProfile(data) {
+        return hasExactly(data, ['name', 'image', 'createdAt'])
+          && isNonEmptyStringUpTo(data.name, 200)
+          && isNullOrStringUpTo(data.image, 2000);
+      }
+
+      allow read: if signedIn();
+      allow create: if signedIn() && uid() == userId
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && uid() == userId
+        && validProfile(request.resource.data)
+        && unchanged('createdAt');
+      allow delete: if false;
+    }
+
+    // lists/{listId}: only the owner can see or change a list, except that a list the owner has shared
+    // can also be read (by its id, never listed or queried) by anyone, signed in or not.
+    match /lists/{listId} {
+      function validList(data) {
+        return hasExactly(data, ['name', 'ownerId', 'createdAt', 'shared'])
+          && isNonEmptyStringUpTo(data.name, 200)
+          && data.shared is bool;
+      }
+
+      allow get: if (signedIn() && resource.data.ownerId == uid()) || resource.data.shared == true;
+      allow list: if signedIn() && resource.data.ownerId == uid();
+      allow create: if signedIn()
+        && validList(request.resource.data)
+        && request.resource.data.ownerId == uid()
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && resource.data.ownerId == uid()
+        && validList(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'shared']);
+      allow delete: if signedIn() && resource.data.ownerId == uid();
+
+      // lists/{listId}/tasks/{taskId}: writes, and the public read of a shared list's own tasks.
+      // Owner reads are in the collection-group match below.
+      match /tasks/{taskId} {
+        allow read: if get(/databases/$(database)/documents/lists/$(listId)).data.shared == true;
+
+        function validTask(data) {
+          return hasExactly(data, ['ownerId', 'title', 'notes', 'status', 'dueDate', 'assigneeId', 'position', 'createdAt', 'completedAt', 'tags'])
+            && isNonEmptyStringUpTo(data.title, 500)
+            && isNullOrStringUpTo(data.notes, 5000)
+            && data.status in ['todo', 'doing', 'done']
+            && (data.dueDate == null || (data.dueDate is string && data.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+            && (data.assigneeId == null || (data.assigneeId is string && exists(/databases/$(database)/documents/users/$(data.assigneeId))))
+            && data.position is number
+            && isValidTags(data.tags);
+        }
+
+        // A task is done exactly when completedAt is set. It is set to server time when the task becomes done,
+        // kept while it stays done, and cleared when it leaves done. Same rule as completedAtChange() in src/lib/tasks.ts.
+        function validCompletedAt(data, previousStatus) {
+          return (data.status != 'done' && data.completedAt == null)
+            || (data.status == 'done' && previousStatus == 'done' && data.completedAt == resource.data.completedAt)
+            || (data.status == 'done' && previousStatus != 'done' && data.completedAt == request.time);
+        }
+
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/lists/$(listId)).data.ownerId == uid()
+          && validTask(request.resource.data)
+          && request.resource.data.ownerId == uid()
+          && request.resource.data.createdAt == request.time
+          && validCompletedAt(request.resource.data, null);
+        allow update: if signedIn() && resource.data.ownerId == uid()
+          && validTask(request.resource.data)
+          && unchanged('ownerId')
+          && unchanged('createdAt')
+          && validCompletedAt(request.resource.data, resource.data.status);
+        allow delete: if signedIn() && resource.data.ownerId == uid();
+
+        // lists/{listId}/tasks/{taskId}/subtasks/{subtaskId}: only the task's owner may touch or list these,
+        // never publicly, even on a shared list's page (subtasks aren't part of that feature). Owner reads are
+        // in the collection-group match below.
+        match /subtasks/{subtaskId} {
+          function validSubtask(data) {
+            return hasExactly(data, ['ownerId', 'title', 'done', 'position', 'createdAt'])
+              && isNonEmptyStringUpTo(data.title, 500)
+              && data.done is bool
+              && data.position is number;
+          }
+
+          allow create: if signedIn()
+            && get(/databases/$(database)/documents/lists/$(listId)/tasks/$(taskId)).data.ownerId == uid()
+            && validSubtask(request.resource.data)
+            && request.resource.data.ownerId == uid()
+            && request.resource.data.createdAt == request.time;
+          allow update: if signedIn() && resource.data.ownerId == uid()
+            && validSubtask(request.resource.data)
+            && unchanged('ownerId')
+            && unchanged('createdAt');
+          allow delete: if signedIn() && resource.data.ownerId == uid();
+        }
+      }
+    }
+
+    // Task reads: direct gets, list-page queries and collection-group queries (/today, open counts).
+    // Queries must filter on ownerId == the signed-in user, or they are rejected.
+    match /{path=**}/tasks/{taskId} {
+      allow read: if signedIn() && resource.data.ownerId == uid();
+    }
+
+    // Subtask reads: direct gets and a task's own subtask list. Queries must filter on ownerId == the
+    // signed-in user, or they are rejected. Never publicly readable, unlike a shared list's tasks.
+    match /{path=**}/subtasks/{subtaskId} {
+      allow read: if signedIn() && resource.data.ownerId == uid();
+    }
+  }
+}

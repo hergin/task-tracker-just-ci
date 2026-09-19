@@ -1,0 +1,89 @@
+# CI: runs every test suite on pull requests and on pushes to main. Everything runs on the local Firebase emulators,
+# so it needs no secrets.
+#   checks      lint, typecheck, unit tests, Security Rules tests
+#   acceptance  the Playwright acceptance tests against the dev server and seeded emulators
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # The Firebase emulators need Java 21 or newer.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: npm ci
+
+      - name: Lint, typecheck and unit tests
+        run: npm run verify
+
+      - name: Cache the Firebase emulator downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Security Rules tests
+        run: npm run test:rules
+
+  acceptance:
+    name: acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Cache the Firebase emulator downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Acceptance tests
+        run: npm run test:e2e:local
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: acceptance
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

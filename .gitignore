@@ -1,0 +1,33 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.development
+
+# Firebase
+.firebase/
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+tests/acceptance/.auth/
+
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.sw?

@@ -1,0 +1,31 @@
+name: Feature request
+description: Something a user should be able to do.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe what a user should be able to do, not how to build it.
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What should a user be able to do?
+      description: The user-visible behaviour, in plain language.
+      placeholder: On a list page, a user can show only the tasks with one status.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: One checkbox per condition. Each condition must be checkable by using the app in a browser.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything else, such as context, links, or what is out of scope.
+    validations:
+      required: false
