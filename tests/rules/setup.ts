@@ -63,6 +63,14 @@ export function newTask(ownerId: string, overrides: Record<string, unknown> = {}
   return storedTask(ownerId, { createdAt: serverTimestamp(), ...overrides })
 }
 
+export function storedContact(ownerId: string, overrides: Record<string, unknown> = {}) {
+  return { ownerId, name: 'Ada Lovelace', email: null, note: null, createdAt: FIXED_TIME, ...overrides }
+}
+
+export function newContact(ownerId: string, overrides: Record<string, unknown> = {}) {
+  return storedContact(ownerId, { createdAt: serverTimestamp(), ...overrides })
+}
+
 export function storedSubtask(ownerId: string, overrides: Record<string, unknown> = {}) {
   return { ownerId, title: 'Chop vegetables', done: false, position: 0, createdAt: FIXED_TIME, ...overrides }
 }

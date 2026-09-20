@@ -17,12 +17,52 @@ export function uniqueName(base: string): string {
   return `${base} ${randomUUID().slice(0, 8)}`
 }
 
+/**
+ * A token no other test or run will use, for names whose beginning a test controls, such as the ones
+ * an ordering test has to sort against each other.
+ */
+export function uniqueToken(): string {
+  return randomUUID().slice(0, 8)
+}
+
 /** The row of the list named `name` on the lists page. */
 export function listRow(page: Page, name: string): Locator {
   return page
     .getByRole('list', { name: 'Lists', exact: true })
     .getByRole('listitem')
     .filter({ has: page.getByRole('link', { name, exact: true }) })
+}
+
+/** Opens the contacts page and waits for it. */
+export async function openContacts(page: Page): Promise<void> {
+  await page.goto('/contacts')
+  await expect(page.getByRole('heading', { name: 'Your contacts', exact: true })).toBeVisible()
+}
+
+/** The contacts page's list of contacts. */
+export function contactList(page: Page): Locator {
+  return page.getByRole('list', { name: 'Contacts', exact: true })
+}
+
+/** The row of the contact named `name` on the contacts page, while it shows the contact (not while it is being edited). */
+export function contactRow(page: Page, name: string): Locator {
+  return contactList(page)
+    .getByRole('listitem')
+    .filter({ has: page.getByText(name, { exact: true }) })
+}
+
+/** On the contacts page: adds a contact and waits until the server has saved it. */
+export async function addContact(
+  page: Page,
+  fields: { name: string; email?: string; note?: string },
+): Promise<void> {
+  const nameInput = page.getByLabel('Name', { exact: true })
+  await nameInput.fill(fields.name)
+  await page.getByLabel('Email', { exact: true }).fill(fields.email ?? '')
+  await page.getByLabel('Note', { exact: true }).fill(fields.note ?? '')
+  await page.getByRole('button', { name: 'Add contact', exact: true }).click()
+  // The form clears only once the server confirms the write, so later steps (such as a reload) can rely on it.
+  await expect(nameInput, 'the new contact was saved').toHaveValue('', SERVER_CONFIRMED)
 }
 
 /** The row of the task titled `title` on a list page, open or done (the Done group must be expanded to see it). */
