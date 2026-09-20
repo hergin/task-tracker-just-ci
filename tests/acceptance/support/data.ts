@@ -14,7 +14,15 @@ export const SERVER_CONFIRMED = { timeout: 30_000 }
  * so anything a test creates gets a unique name, and the seed fixture is never changed.
  */
 export function uniqueName(base: string): string {
-  return `${base} ${randomUUID().slice(0, 8)}`
+  return `${base} ${uniqueToken()}`
+}
+
+/**
+ * A token no other test or run will use, to build several related names with: a test's own contacts are told
+ * apart from every other test's by the token their names and emails share.
+ */
+export function uniqueToken(): string {
+  return randomUUID().slice(0, 8)
 }
 
 /** The row of the list named `name` on the lists page. */
@@ -23,6 +31,44 @@ export function listRow(page: Page, name: string): Locator {
     .getByRole('list', { name: 'Lists', exact: true })
     .getByRole('listitem')
     .filter({ has: page.getByRole('link', { name, exact: true }) })
+}
+
+/** The items on the contacts page whose text contains `text`: a test's own contacts, told apart by their unique token. */
+export function contactRows(page: Page, text: string): Locator {
+  return page.getByRole('list', { name: 'Contacts', exact: true }).getByRole('listitem').filter({ hasText: text })
+}
+
+/** The item of the contact named `name` on the contacts page. */
+export function contactRow(page: Page, name: string): Locator {
+  return contactRows(page, name)
+}
+
+/** On the contacts page: adds a contact and waits until the server has saved it. */
+export async function addContact(page: Page, name: string, email: string): Promise<void> {
+  const nameInput = page.getByLabel('Contact name', { exact: true })
+  await nameInput.fill(name)
+  await page.getByLabel('Contact email', { exact: true }).fill(email)
+  await page.getByRole('button', { name: 'Add contact', exact: true }).click()
+  // The fields clear only once the server confirms the write.
+  await expect(nameInput, 'the new contact was saved').toHaveValue('', SERVER_CONFIRMED)
+}
+
+/**
+ * Opens the contacts page and deletes every contact, so a test can check what it shows with none left.
+ * Every acceptance test signs in as the same user, so the contacts tests share one set of contacts and
+ * run one at a time (the describe mode in the contacts spec).
+ */
+export async function deleteAllContacts(page: Page): Promise<void> {
+  await page.goto('/contacts')
+  const items = page.getByRole('list', { name: 'Contacts', exact: true }).getByRole('listitem')
+  // Once the contacts have loaded the page shows either the empty state or the list.
+  await expect(page.getByText('No contacts yet.', { exact: true }).or(items.first())).toBeVisible()
+  for (let left = await items.count(); left > 0; left -= 1) {
+    await items.first().getByRole('button', { name: /^Delete\b/ }).click()
+    await page.getByRole('button', { name: 'Delete contact', exact: true }).click()
+    // The item goes only once the server has deleted the contact.
+    await expect(items).toHaveCount(left - 1, SERVER_CONFIRMED)
+  }
 }
 
 /** The row of the task titled `title` on a list page, open or done (the Done group must be expanded to see it). */
