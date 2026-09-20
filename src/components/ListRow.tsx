@@ -9,12 +9,14 @@ type Props = {
   list: List
   uid: string
   openCount: number
+  /** How many of those open tasks are overdue. Nothing is shown when none are. */
+  overdueCount: number
   /** Called once the server has deleted the list, with the name it had. */
   onDeleted: (name: string) => void
 }
 
-/** One row on the lists page: the list's link and open-task count, renaming in place, deleting after confirmation. */
-export function ListRow({ list, uid, openCount, onDeleted }: Props) {
+/** One row on the lists page: the list's link and task counts, renaming in place, deleting after confirmation. */
+export function ListRow({ list, uid, openCount, overdueCount, onDeleted }: Props) {
   const [mode, setMode] = useState<'view' | 'rename' | 'confirm-delete'>('view')
   const [name, setName] = useState(list.name)
   const rename = useAction(renameList)
@@ -106,6 +108,7 @@ export function ListRow({ list, uid, openCount, onDeleted }: Props) {
         {list.name}
       </Link>
       <span className="text-sm text-gray-500">{openCount} open</span>
+      {overdueCount > 0 && <span className="text-sm font-medium text-red-700">{overdueCount} overdue</span>}
       <button
         type="button"
         aria-label={`Rename ${list.name}`}

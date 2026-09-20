@@ -19,13 +19,14 @@ import {
   compareTasks,
   completedAtChange,
   countOpenTasksByList,
+  countOverdueTasksByList,
   normalizeTaskEdit,
   type TaskEditInput,
 } from '../lib/tasks'
 import { requiredText } from '../lib/text'
 import { taskFromSnapshot } from './converters'
 import { attempt } from './errors'
-import { LIMITS, type Task, type TaskStatus } from './types'
+import { LIMITS, type DateKey, type Task, type TaskStatus } from './types'
 
 /** A task as listed on its list page. `saving` is true while the server hasn't confirmed a change to it yet. */
 export type ListedTask = Task & { saving: boolean }
@@ -73,12 +74,18 @@ export function useAllTasks(uid: string): SubscriptionState<ListedTask[]> {
   )
 }
 
-/** How many open tasks each of the signed-in user's lists has, by list id. Lists without open tasks are left out. */
-export function useOpenTaskCounts(uid: string): SubscriptionState<Record<string, number>> {
-  return useSubscription(`open-task-counts:${uid}`, (onData, onError) =>
+/** How many open and overdue tasks each list has, by list id. Lists without any are left out of that count. */
+export type TaskCounts = { open: Record<string, number>; overdue: Record<string, number> }
+
+/** The counts of the signed-in user's lists, judged overdue against `today` (the browser's local date). */
+export function useTaskCounts(uid: string, today: DateKey): SubscriptionState<TaskCounts> {
+  return useSubscription(`task-counts:${uid}:${today}`, (onData, onError) =>
     onSnapshot(
       query(collectionGroup(db, 'tasks'), where('ownerId', '==', uid)),
-      (snapshot) => onData(countOpenTasksByList(snapshot.docs.map(taskFromSnapshot))),
+      (snapshot) => {
+        const tasks = snapshot.docs.map(taskFromSnapshot)
+        onData({ open: countOpenTasksByList(tasks), overdue: countOverdueTasksByList(tasks, today) })
+      },
       onError,
     ),
   )

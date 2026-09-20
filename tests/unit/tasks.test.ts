@@ -5,11 +5,13 @@ import {
   compareTasks,
   completedAtChange,
   countOpenTasksByList,
+  countOverdueTasksByList,
   filterByStatus,
   filterByTag,
   groupDueByToday,
   isDueByToday,
   isOpen,
+  isOverdue,
   moveTaskByDirection,
   nextPosition,
   nextStatus,
@@ -290,6 +292,45 @@ describe('countOpenTasksByList', () => {
 
   it('leaves out lists whose tasks are all done', () => {
     expect(countOpenTasksByList([task({ listId: 'archive', status: 'done' })])).toEqual({})
+  })
+})
+
+describe('isOverdue', () => {
+  it('is true for a todo or doing task due before today', () => {
+    expect(isOverdue(task({ status: 'todo', dueDate: '2026-01-14' }), '2026-01-15')).toBe(true)
+    expect(isOverdue(task({ status: 'doing', dueDate: '2026-01-14' }), '2026-01-15')).toBe(true)
+  })
+
+  it('is false for a task due today, due later, or with no due date', () => {
+    expect(isOverdue(task({ dueDate: '2026-01-15' }), '2026-01-15')).toBe(false)
+    expect(isOverdue(task({ dueDate: '2026-01-16' }), '2026-01-15')).toBe(false)
+    expect(isOverdue(task({ dueDate: null }), '2026-01-15')).toBe(false)
+  })
+
+  it('is false for a done or postponed task, however late its due date', () => {
+    expect(isOverdue(task({ status: 'done', dueDate: '2026-01-01' }), '2026-01-15')).toBe(false)
+    expect(isOverdue(task({ status: 'postponed', dueDate: '2026-01-01' }), '2026-01-15')).toBe(false)
+  })
+})
+
+describe('countOverdueTasksByList', () => {
+  it('counts overdue tasks per list', () => {
+    const tasks = [
+      task({ listId: 'groceries', status: 'todo', dueDate: '2026-01-14' }),
+      task({ listId: 'groceries', status: 'doing', dueDate: '2026-01-01' }),
+      task({ listId: 'groceries', status: 'todo', dueDate: '2026-01-15' }),
+      task({ listId: 'work', status: 'todo', dueDate: '2026-01-14' }),
+    ]
+    expect(countOverdueTasksByList(tasks, '2026-01-15')).toEqual({ groceries: 2, work: 1 })
+  })
+
+  it('leaves out lists with nothing overdue', () => {
+    const tasks = [
+      task({ listId: 'archive', status: 'done', dueDate: '2026-01-01' }),
+      task({ listId: 'later', status: 'postponed', dueDate: '2026-01-01' }),
+      task({ listId: 'undated', dueDate: null }),
+    ]
+    expect(countOverdueTasksByList(tasks, '2026-01-15')).toEqual({})
   })
 })
 

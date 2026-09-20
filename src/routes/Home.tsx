@@ -4,15 +4,16 @@ import { ListRow } from '../components/ListRow'
 import { Loading } from '../components/Loading'
 import { useCurrentUser } from '../data/auth'
 import { createList, useLists } from '../data/lists'
-import { useOpenTaskCounts } from '../data/tasks'
+import { useTaskCounts } from '../data/tasks'
 import { LIMITS } from '../data/types'
 import { useAction } from '../hooks/useAction'
+import { toDateKey } from '../lib/dates'
 
 /** `/`: the signed-in user's lists. */
 export function Home() {
   const user = useCurrentUser()
   const lists = useLists(user.uid)
-  const openCounts = useOpenTaskCounts(user.uid)
+  const counts = useTaskCounts(user.uid, toDateKey(new Date()))
   const create = useAction(createList)
   const [name, setName] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -58,7 +59,7 @@ export function Home() {
         </p>
       )}
 
-      {lists.status === 'loading' || openCounts.status === 'loading' ? (
+      {lists.status === 'loading' || counts.status === 'loading' ? (
         <Loading />
       ) : lists.data.length === 0 ? (
         <p className="mt-6 text-gray-600">No lists yet.</p>
@@ -69,7 +70,8 @@ export function Home() {
               key={list.id}
               list={list}
               uid={user.uid}
-              openCount={openCounts.data[list.id] ?? 0}
+              openCount={counts.data.open[list.id] ?? 0}
+              overdueCount={counts.data.overdue[list.id] ?? 0}
               onDeleted={(deletedName) => setNotice(`Deleted "${deletedName}".`)}
             />
           ))}
