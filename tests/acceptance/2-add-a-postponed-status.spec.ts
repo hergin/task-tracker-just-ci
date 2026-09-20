@@ -205,7 +205,8 @@ test.describe('postponed status', () => {
 
     await page.getByRole('link', { name: 'Today', exact: true }).click()
     await expect(page.getByRole('list', { name: `Due in ${listName}`, exact: true }).getByRole('listitem')).toHaveText([
-      /Submit the form.*Postponed · Due today/,
+      // Today shows the status as the button that advances it (#30), before the title and the due information.
+      /Postponed.*Submit the form.*Due today/,
     ])
 
     await page.goto(listUrl)

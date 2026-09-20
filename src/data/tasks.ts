@@ -60,11 +60,14 @@ export function useSharedTasks(listId: string): SubscriptionState<Task[]> {
 }
 
 /** Every task in the signed-in user's lists. */
-export function useAllTasks(uid: string): SubscriptionState<Task[]> {
+export function useAllTasks(uid: string): SubscriptionState<ListedTask[]> {
   return useSubscription(`all-tasks:${uid}`, (onData, onError) =>
     onSnapshot(
       query(collectionGroup(db, 'tasks'), where('ownerId', '==', uid)),
-      (snapshot) => onData(snapshot.docs.map(taskFromSnapshot)),
+      // Metadata changes too, so `saving` turns false when the server confirms a write (as in useTasks).
+      { includeMetadataChanges: true },
+      (snapshot) =>
+        onData(snapshot.docs.map((task) => ({ ...taskFromSnapshot(task), saving: task.metadata.hasPendingWrites }))),
       onError,
     ),
   )

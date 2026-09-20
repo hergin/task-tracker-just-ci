@@ -1,10 +1,11 @@
 import { deleteTask, setTaskStatus, type ListedTask } from '../data/tasks'
-import type { DateKey, TaskStatus, UserProfile } from '../data/types'
+import type { DateKey, UserProfile } from '../data/types'
 import { useAction } from '../hooks/useAction'
 import { dueState } from '../lib/dates'
 import type { ResultError } from '../lib/result'
-import { STATUS_LABELS, isOpen, nextStatus, type MoveDirection } from '../lib/tasks'
+import { isOpen, nextStatus, type MoveDirection } from '../lib/tasks'
 import { FormError } from './FormError'
+import { StatusButton } from './StatusButton'
 import { Subtasks } from './Subtasks'
 import { TaskEditForm } from './TaskEditForm'
 
@@ -36,13 +37,6 @@ type Props = {
   editingSubtaskId: string | null
   onEditSubtask: (subtaskId: string) => void
   onCloseSubtaskEdit: () => void
-}
-
-const STATUS_STYLES: Record<TaskStatus, string> = {
-  todo: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
-  doing: 'bg-amber-100 text-amber-900 hover:bg-amber-200',
-  done: 'bg-green-100 text-green-900 hover:bg-green-200',
-  postponed: 'bg-purple-100 text-purple-900 hover:bg-purple-200',
 }
 
 /** One task on the list page: its reorder handle, status button, details, and Edit and Delete. */
@@ -82,7 +76,6 @@ export function TaskRow({
     if (result.ok) onDeleted(task.title)
   }
 
-  const label = STATUS_LABELS[task.status]
   const overdue = isOpen(task) && dueState(task.dueDate, today) === 'overdue'
   const assignee = users.find((user) => user.id === task.assigneeId)
 
@@ -116,15 +109,12 @@ export function TaskRow({
           <span aria-hidden="true">⠿</span>
         </button>
       )}
-      <button
-        type="button"
-        aria-label={`${label}: change status of ${task.title}`}
+      <StatusButton
+        status={task.status}
+        title={task.title}
         onClick={() => void status.run(task, nextStatus(task.status))}
         disabled={status.pending}
-        className={`w-20 shrink-0 rounded px-2 py-1 text-xs font-medium disabled:opacity-50 ${STATUS_STYLES[task.status]}`}
-      >
-        {label}
-      </button>
+      />
       <div className="min-w-0 flex-1">
         <p className={task.status === 'done' ? 'text-gray-500 line-through' : 'text-gray-900'}>{task.title}</p>
         {task.notes && <p className="mt-1 whitespace-pre-wrap text-sm text-gray-600">{task.notes}</p>}
