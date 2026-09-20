@@ -150,6 +150,23 @@ export function countOpenTasksByList(tasks: readonly Pick<Task, 'listId' | 'stat
   return counts
 }
 
+/** Whether a task is late: To do or Doing, with a due date before `today`. Done and postponed tasks never are. */
+export function isOverdue(task: Pick<Task, 'status' | 'dueDate'>, today: DateKey): boolean {
+  return task.status !== 'done' && task.status !== 'postponed' && dueState(task.dueDate, today) === 'overdue'
+}
+
+/** How many overdue tasks each list has, by list id. Lists without overdue tasks are left out. */
+export function countOverdueTasksByList(
+  tasks: readonly Pick<Task, 'listId' | 'status' | 'dueDate'>[],
+  today: DateKey,
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const task of tasks) {
+    if (isOverdue(task, today)) counts[task.listId] = (counts[task.listId] ?? 0) + 1
+  }
+  return counts
+}
+
 /** The position for a task added at the end of a list. */
 export function nextPosition(tasks: readonly Pick<Task, 'position'>[]): number {
   return tasks.reduce((max, task) => Math.max(max, task.position + 1), 0)
