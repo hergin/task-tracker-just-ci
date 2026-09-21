@@ -4,12 +4,13 @@ import { FormError } from '../components/FormError'
 import { Loading } from '../components/Loading'
 import { TaskRow } from '../components/TaskRow'
 import { useCurrentUser } from '../data/auth'
-import { shareList, useList } from '../data/lists'
+import { shareList, useList, useLists } from '../data/lists'
 import { addTask, moveTask, useTasks, type ListedTask } from '../data/tasks'
 import { LIMITS } from '../data/types'
 import { useUsers } from '../data/users'
 import { useAction } from '../hooks/useAction'
 import { toDateKey } from '../lib/dates'
+import { otherLists } from '../lib/lists'
 import {
   filterByStatus,
   filterByTag,
@@ -40,6 +41,7 @@ export function ListDetail() {
   const [searchParams, setSearchParams] = useSearchParams()
   const user = useCurrentUser()
   const list = useList(listId, user.uid)
+  const lists = useLists(user.uid)
   const tasks = useTasks(listId, user.uid)
   const users = useUsers()
   const add = useAction(addTask)
@@ -107,7 +109,8 @@ export function ListDetail() {
     )
   }
 
-  if (list.status === 'loading' || tasks.status === 'loading' || users.status === 'loading') return <Loading />
+  if (list.status === 'loading' || lists.status === 'loading' || tasks.status === 'loading' || users.status === 'loading')
+    return <Loading />
 
   if (list.data === null) {
     return (
@@ -121,6 +124,7 @@ export function ListDetail() {
   }
 
   const allTasks = tasks.data
+  const moveTargets = otherLists(lists.data, listId)
   const { open, done } = splitByDone(allTasks)
   const orderedOpen = orderTasks(open, taskOrder)
   const today = toDateKey(new Date())
@@ -164,6 +168,8 @@ export function ListDetail() {
         onEdit={() => onEditTask(task.id)}
         onCloseEdit={() => setEditingId(null)}
         onDeleted={(deletedTitle) => setNotice(`Deleted "${deletedTitle}".`)}
+        otherLists={moveTargets}
+        onMoved={(movedTitle, listName) => setNotice(`Moved "${movedTitle}" to "${listName}".`)}
         onTagClick={onTagClick}
         onMove={(direction) => runMove(moveTaskByDirection(group, task.id, direction), task.id)}
         onDropTask={(draggedTaskId) =>

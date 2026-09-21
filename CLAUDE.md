@@ -63,7 +63,7 @@ Types live in `src/data/types.ts`.
 
 - **Every field is always present.** Optional fields are stored as `null`, never omitted; the rules reject documents with missing or extra fields.
 - `status` is `'todo' | 'doing' | 'done' | 'postponed'`. `dueDate` is a `'YYYY-MM-DD'` string with no time zone; "today" is the browser's local date (`toDateKey` in `src/lib/dates.ts`).
-- `createdAt` is server time. `completedAt` is set to server time when a task becomes done, kept while it stays done, and cleared when it leaves done: `completedAtChange` in `src/lib/tasks.ts`, enforced identically by the rules.
+- `createdAt` is server time. `completedAt` is set to server time when a task becomes done, kept while it stays done, and cleared when it leaves done: `completedAtChange` in `src/lib/tasks.ts`, enforced identically by the rules. Moving a task to another list writes it again with the dates it already had (`moveTaskToList`), so on create the rules accept any timestamp that is not in the future; every other write sends server time.
 - `ownerId` is repeated on every task, so rules can check it and queries can span lists.
 - A user profile holds no email (profiles are readable by every signed-in user). Email stays in Firebase Auth. The profile is created or refreshed on every sign-in (`src/data/auth.ts`).
 - Field limits are `LIMITS` in `src/data/types.ts`, mirrored in `firestore.rules`. Change both together.

@@ -14,16 +14,17 @@ import {
 } from 'firebase/firestore'
 import { useSubscription, type SubscriptionState } from '../hooks/useSubscription'
 import { db } from '../lib/firebase'
-import type { Result } from '../lib/result'
+import { err, type Result } from '../lib/result'
 import {
   compareTasks,
   completedAtChange,
   countOpenTasksByList,
+  nextPosition,
   normalizeTaskEdit,
   type TaskEditInput,
 } from '../lib/tasks'
 import { requiredText } from '../lib/text'
-import { taskFromSnapshot } from './converters'
+import { subtaskFromSnapshot, taskFromSnapshot } from './converters'
 import { attempt } from './errors'
 import { LIMITS, type Task, type TaskStatus } from './types'
 
@@ -141,15 +142,82 @@ const BATCH_LIMIT = 500
 /** Deletes a task and its subtasks: Firestore never deletes a subcollection by itself (deleteList does the same). */
 export async function deleteTask(task: TaskKey & Pick<Task, 'ownerId'>): Promise<Result<void>> {
   return attempt(async () => {
-    const subtasks = await getDocs(
-      query(collection(db, 'lists', task.listId, 'tasks', task.id, 'subtasks'), where('ownerId', '==', task.ownerId)),
-    )
+    const subtasks = await subtasksOf(task)
     for (let start = 0; start < subtasks.docs.length; start += BATCH_LIMIT) {
       const batch = writeBatch(db)
       for (const subtask of subtasks.docs.slice(start, start + BATCH_LIMIT)) batch.delete(subtask.ref)
       await batch.commit()
     }
     await deleteDoc(taskRef(task))
+  })
+}
+
+export type TaskMove = {
+  task: Task
+  /** The list the task is moved to: another list of the same owner. */
+  toListId: string
+}
+
+/** Reads the subtasks of `task`, filtered on ownerId as every query must be. */
+function subtasksOf(task: TaskKey & Pick<Task, 'ownerId'>) {
+  return getDocs(
+    query(collection(db, 'lists', task.listId, 'tasks', task.id, 'subtasks'), where('ownerId', '==', task.ownerId)),
+  )
+}
+
+/**
+ * Moves a task to another of the owner's lists, with its subtasks, and puts it at the end of that list.
+ * Firestore never moves a document, so the task and each subtask are written into the chosen list and the
+ * originals deleted, all in one batch: the move either happens completely or not at all, and the task is
+ * never in both lists or in neither. A task with too many subtasks to fit in one batch is refused instead.
+ *
+ * A move keeps everything the task had, the dates included: the copies carry the createdAt and completedAt read
+ * from the originals, and each subtask copy the createdAt of the subtask it comes from. The rules cannot tell a
+ * move from an ordinary create, so they accept any createdAt, and any completedAt of a done task, that is not in
+ * the future; every other write still sends server time.
+ */
+export async function moveTaskToList({ task, toListId }: TaskMove): Promise<Result<void>> {
+  const loaded = await attempt(async () => {
+    const [subtasks, tasksInTarget] = await Promise.all([
+      subtasksOf(task),
+      getDocs(query(collection(db, 'lists', toListId, 'tasks'), where('ownerId', '==', task.ownerId))),
+    ])
+    return { subtasks: subtasks.docs, position: nextPosition(tasksInTarget.docs.map(taskFromSnapshot)) }
+  })
+  if (!loaded.ok) return loaded
+  const { subtasks, position } = loaded.data
+  // The task and each subtask are written once and deleted once.
+  if (2 * subtasks.length + 2 > BATCH_LIMIT) {
+    return err('too-many-subtasks', 'This task has too many subtasks to move to another list.')
+  }
+  return attempt(async () => {
+    const batch = writeBatch(db)
+    const moved = doc(collection(db, 'lists', toListId, 'tasks'))
+    batch.set(moved, {
+      ownerId: task.ownerId,
+      title: task.title,
+      notes: task.notes,
+      status: task.status,
+      dueDate: task.dueDate,
+      assigneeId: task.assigneeId,
+      position,
+      createdAt: task.createdAt,
+      completedAt: task.completedAt,
+      tags: task.tags,
+    })
+    for (const snapshot of subtasks) {
+      const subtask = subtaskFromSnapshot(snapshot)
+      batch.set(doc(collection(moved, 'subtasks')), {
+        ownerId: subtask.ownerId,
+        title: subtask.title,
+        done: subtask.done,
+        position: subtask.position,
+        createdAt: subtask.createdAt,
+      })
+      batch.delete(snapshot.ref)
+    }
+    batch.delete(taskRef(task))
+    await batch.commit()
   })
 }
 

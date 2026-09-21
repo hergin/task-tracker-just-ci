@@ -1,5 +1,6 @@
-import { deleteTask, setTaskStatus, type ListedTask } from '../data/tasks'
-import type { DateKey, UserProfile } from '../data/types'
+import { useState } from 'react'
+import { deleteTask, moveTaskToList, setTaskStatus, type ListedTask } from '../data/tasks'
+import type { DateKey, List, UserProfile } from '../data/types'
 import { useAction } from '../hooks/useAction'
 import { dueState } from '../lib/dates'
 import type { ResultError } from '../lib/result'
@@ -18,6 +19,10 @@ type Props = {
   onCloseEdit: () => void
   /** Called once the server has deleted the task, with the title it had. */
   onDeleted: (title: string) => void
+  /** The user's other lists, to move this task to. Empty when they have none: then there is no move control. */
+  otherLists: readonly List[]
+  /** Called once the server has moved the task, with its title and the name of the list it went to. */
+  onMoved: (title: string, listName: string) => void
   /** Called with a tag's text when the user clicks it, to narrow the list to that tag. */
   onTagClick: (tag: string) => void
   /** Moves this task one place up or down within its group. */
@@ -48,6 +53,8 @@ export function TaskRow({
   onEdit,
   onCloseEdit,
   onDeleted,
+  otherLists,
+  onMoved,
   onTagClick,
   onMove,
   onDropTask,
@@ -62,6 +69,8 @@ export function TaskRow({
 }: Props) {
   const status = useAction(setTaskStatus)
   const remove = useAction(deleteTask)
+  const moveToList = useAction(moveTaskToList)
+  const [moveTargetId, setMoveTargetId] = useState('')
 
   if (editing) {
     return (
@@ -74,6 +83,17 @@ export function TaskRow({
   async function onDelete() {
     const result = await remove.run(task)
     if (result.ok) onDeleted(task.title)
+  }
+
+  /** Choosing a list moves the task there at once: there is no separate button to confirm it. */
+  async function onMoveToList(toListId: string) {
+    const target = otherLists.find((list) => list.id === toListId)
+    if (!target) return
+    setMoveTargetId(toListId)
+    const result = await moveToList.run({ task, toListId })
+    // On success this row is gone with the task; on failure the control goes back to offering the move again.
+    if (result.ok) onMoved(task.title, target.name)
+    else setMoveTargetId('')
   }
 
   const overdue = isOpen(task) && dueState(task.dueDate, today) === 'overdue'
@@ -145,7 +165,7 @@ export function TaskRow({
             ))}
           </ul>
         )}
-        <FormError error={status.error ?? remove.error ?? moveError} />
+        <FormError error={status.error ?? remove.error ?? moveToList.error ?? moveError} />
         <Subtasks
           uid={uid}
           listId={task.listId}
@@ -156,6 +176,22 @@ export function TaskRow({
           onCloseSubtaskEdit={onCloseSubtaskEdit}
         />
       </div>
+      {otherLists.length > 0 && (
+        <select
+          aria-label={`Move ${task.title} to another list`}
+          value={moveTargetId}
+          onChange={(event) => void onMoveToList(event.target.value)}
+          disabled={moveToList.pending}
+          className="shrink-0 rounded border border-gray-300 bg-white px-1 py-0.5 text-sm text-gray-700 disabled:opacity-50"
+        >
+          <option value="">Move to…</option>
+          {otherLists.map((list) => (
+            <option key={list.id} value={list.id}>
+              {list.name}
+            </option>
+          ))}
+        </select>
+      )}
       <button type="button" aria-label={`Edit ${task.title}`} onClick={onEdit} className="text-sm text-blue-700 hover:underline">
         Edit
       </button>
