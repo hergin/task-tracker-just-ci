@@ -44,6 +44,13 @@ service cloud.firestore {
         && (value.size() < 10 || isValidTag(value[9]));
     }
 
+    // A date a client may write on a created task or subtask: the server time of an ordinary create, or the date
+    // the document already had, which moveTaskToList (src/data/tasks.ts) carries over when it moves a task to
+    // another list. Never the future, so nothing can be dated ahead of now.
+    function notInFuture(value) {
+      return value is timestamp && value <= request.time;
+    }
+
     function unchanged(field) {
       return request.resource.data[field] == resource.data[field];
     }
@@ -102,20 +109,27 @@ service cloud.firestore {
             && isValidTags(data.tags);
         }
 
-        // A task is done exactly when completedAt is set. It is set to server time when the task becomes done,
-        // kept while it stays done, and cleared when it leaves done. Same rule as completedAtChange() in src/lib/tasks.ts.
+        // A task is done exactly when completedAt is set. On update it is set to server time when the task becomes
+        // done, kept while it stays done, and cleared when it leaves done. Same rule as completedAtChange() in src/lib/tasks.ts.
         function validCompletedAt(data, previousStatus) {
           return (data.status != 'done' && data.completedAt == null)
             || (data.status == 'done' && previousStatus == 'done' && data.completedAt == resource.data.completedAt)
             || (data.status == 'done' && previousStatus != 'done' && data.completedAt == request.time);
         }
 
+        // On create there is nothing to compare with: a task is done exactly when it has a completedAt, which is
+        // the server time for a task ticked off now and the one it already had for a done task being moved.
+        function validNewCompletedAt(data) {
+          return (data.status != 'done' && data.completedAt == null)
+            || (data.status == 'done' && notInFuture(data.completedAt));
+        }
+
         allow create: if signedIn()
           && get(/databases/$(database)/documents/lists/$(listId)).data.ownerId == uid()
           && validTask(request.resource.data)
           && request.resource.data.ownerId == uid()
-          && request.resource.data.createdAt == request.time
-          && validCompletedAt(request.resource.data, null);
+          && notInFuture(request.resource.data.createdAt)
+          && validNewCompletedAt(request.resource.data);
         allow update: if signedIn() && resource.data.ownerId == uid()
           && validTask(request.resource.data)
           && unchanged('ownerId')
@@ -140,7 +154,7 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/lists/$(listId)/tasks/$(taskId)).data.ownerId == uid()
             && validSubtask(request.resource.data)
             && request.resource.data.ownerId == uid()
-            && request.resource.data.createdAt == request.time;
+            && notInFuture(request.resource.data.createdAt);
           allow update: if signedIn() && resource.data.ownerId == uid()
             && validSubtask(request.resource.data)
             && unchanged('ownerId')

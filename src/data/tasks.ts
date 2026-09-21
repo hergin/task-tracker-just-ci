@@ -171,8 +171,10 @@ function subtasksOf(task: TaskKey & Pick<Task, 'ownerId'>) {
  * originals deleted, all in one batch: the move either happens completely or not at all, and the task is
  * never in both lists or in neither. A task with too many subtasks to fit in one batch is refused instead.
  *
- * The copies are new documents, so createdAt (and completedAt for a done task) is the time of the move:
- * the rules require both to be the server time on create, and neither is shown anywhere.
+ * A move keeps everything the task had, the dates included: the copies carry the createdAt and completedAt read
+ * from the originals, and each subtask copy the createdAt of the subtask it comes from. The rules cannot tell a
+ * move from an ordinary create, so they accept any createdAt, and any completedAt of a done task, that is not in
+ * the future; every other write still sends server time.
  */
 export async function moveTaskToList({ task, toListId }: TaskMove): Promise<Result<void>> {
   const loaded = await attempt(async () => {
@@ -199,8 +201,8 @@ export async function moveTaskToList({ task, toListId }: TaskMove): Promise<Resu
       dueDate: task.dueDate,
       assigneeId: task.assigneeId,
       position,
-      createdAt: serverTimestamp(),
-      completedAt: completedAtChange(null, task.status) === 'set' ? serverTimestamp() : null,
+      createdAt: task.createdAt,
+      completedAt: task.completedAt,
       tags: task.tags,
     })
     for (const snapshot of subtasks) {
@@ -210,7 +212,7 @@ export async function moveTaskToList({ task, toListId }: TaskMove): Promise<Resu
         title: subtask.title,
         done: subtask.done,
         position: subtask.position,
-        createdAt: serverTimestamp(),
+        createdAt: subtask.createdAt,
       })
       batch.delete(snapshot.ref)
     }

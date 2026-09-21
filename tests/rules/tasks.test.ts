@@ -13,7 +13,18 @@ import {
   where,
 } from 'firebase/firestore'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
-import { FIXED_TIME, createRulesEnv, dbAs, newTask, seed, storedList, storedProfile, storedTask } from './setup'
+import {
+  FIXED_TIME,
+  FUTURE_TIME,
+  createRulesEnv,
+  dbAs,
+  newTask,
+  seed,
+  storedList,
+  storedProfile,
+  storedTask,
+  without,
+} from './setup'
 
 let env: RulesTestEnvironment
 
@@ -139,22 +150,36 @@ describe('tasks: creating', () => {
     await assertFails(setDoc(doc(alice, aliceTask('ghost')), newTask('alice', { assigneeId: 'nobody' })))
   })
 
-  it('createdAt must be the server time', async () => {
-    await assertFails(setDoc(doc(dbAs(env, 'alice'), aliceTask('new')), newTask('alice', { createdAt: FIXED_TIME })))
+  it('createdAt must be a timestamp, and never in the future', async () => {
+    const alice = dbAs(env, 'alice')
+    await assertFails(setDoc(doc(alice, aliceTask('undated')), without(newTask('alice'), 'createdAt')))
+    await assertFails(setDoc(doc(alice, aliceTask('not-a-time')), newTask('alice', { createdAt: '2026-01-01' })))
+    await assertFails(setDoc(doc(alice, aliceTask('dated-ahead')), newTask('alice', { createdAt: FUTURE_TIME })))
+  })
+
+  it('a task can be created with the createdAt it already had, as moving it to another list does', async () => {
+    await assertSucceeds(setDoc(doc(dbAs(env, 'alice'), aliceTask('moved')), newTask('alice', { createdAt: FIXED_TIME })))
   })
 
   it('a task that is not done cannot have completedAt', async () => {
-    await assertFails(
-      setDoc(doc(dbAs(env, 'alice'), aliceTask('new')), newTask('alice', { completedAt: serverTimestamp() })),
-    )
+    const alice = dbAs(env, 'alice')
+    await assertFails(setDoc(doc(alice, aliceTask('new')), newTask('alice', { completedAt: serverTimestamp() })))
+    await assertFails(setDoc(doc(alice, aliceTask('completed-before')), newTask('alice', { completedAt: FIXED_TIME })))
   })
 
-  it('a task created as done must have completedAt set to server time', async () => {
+  it('a task created as done must have a completedAt that is not in the future', async () => {
     const alice = dbAs(env, 'alice')
     await assertSucceeds(
       setDoc(doc(alice, aliceTask('done-now')), newTask('alice', { status: 'done', completedAt: serverTimestamp() })),
     )
+    // A done task moved to another list is written again with the completedAt it already had.
+    await assertSucceeds(
+      setDoc(doc(alice, aliceTask('done-before')), newTask('alice', { status: 'done', completedAt: FIXED_TIME })),
+    )
     await assertFails(setDoc(doc(alice, aliceTask('done-null')), newTask('alice', { status: 'done', completedAt: null })))
+    await assertFails(
+      setDoc(doc(alice, aliceTask('done-ahead')), newTask('alice', { status: 'done', completedAt: FUTURE_TIME })),
+    )
   })
 
   it('tags must be a list of at most 10 non-empty strings of at most 50 characters', async () => {

@@ -27,6 +27,16 @@ export async function seed(env: RulesTestEnvironment, docs: Record<string, Recor
 
 export const FIXED_TIME = Timestamp.fromDate(new Date('2026-01-01T09:00:00Z'))
 
+/** A time no document can have reached yet: a created document may never be dated ahead of now. */
+export const FUTURE_TIME = Timestamp.fromDate(new Date('2099-01-01T09:00:00Z'))
+
+/** A document as the app would write it, with one field left out: the rules refuse a document missing a field. */
+export function without(data: Record<string, unknown>, field: string): Record<string, unknown> {
+  const rest = { ...data }
+  delete rest[field]
+  return rest
+}
+
 // Stored documents, as they look after a valid write.
 
 export function storedProfile(name: string) {
