@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dueState, isDateKey, toDateKey } from '../../src/lib/dates'
+import { dueState, isDateKey, nextDay, toDateKey } from '../../src/lib/dates'
 
 describe('toDateKey', () => {
   it('uses the local calendar date, even late in the day', () => {
@@ -18,6 +18,16 @@ describe('isDateKey', () => {
 
   it.each(['2026-02-30', '2027-02-29', '2026-13-01', '2026-1-5', 'tomorrow', ''])('rejects %j', (value) => {
     expect(isDateKey(value)).toBe(false)
+  })
+})
+
+describe('nextDay', () => {
+  it('gives the day after, over the end of a month, of a year and of February in a leap and a common year', () => {
+    expect(nextDay('2026-09-21')).toBe('2026-09-22')
+    expect(nextDay('2026-01-31')).toBe('2026-02-01')
+    expect(nextDay('2026-12-31')).toBe('2027-01-01')
+    expect(nextDay('2028-02-28')).toBe('2028-02-29')
+    expect(nextDay('2027-02-28')).toBe('2027-03-01')
   })
 })
 
