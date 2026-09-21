@@ -1,7 +1,7 @@
-import { setTaskStatus, type ListedTask } from '../data/tasks'
+import { setTaskDueDate, setTaskStatus, type ListedTask } from '../data/tasks'
 import type { DateKey } from '../data/types'
 import { useAction } from '../hooks/useAction'
-import { dueState } from '../lib/dates'
+import { dueState, nextDateKey } from '../lib/dates'
 import type { ResultError } from '../lib/result'
 import { nextStatus } from '../lib/tasks'
 import { FormError } from './FormError'
@@ -18,13 +18,21 @@ type Props = {
   onFailed: (error: ResultError) => void
 }
 
-/** One task on the Today page: the button that advances its status, its title, and its due information. */
+/** One task on the Today page: the buttons that advance its status and push it to tomorrow, its title, and its due information. */
 export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
   const status = useAction(setTaskStatus)
+  const move = useAction(setTaskDueDate)
 
   async function onChangeStatus() {
     onStart()
     const result = await status.run(task, nextStatus(task.status))
+    if (!result.ok) onFailed(result.error)
+  }
+
+  // Tomorrow is the day after the date this page shows, so the task always leaves Today.
+  async function onMoveToTomorrow() {
+    onStart()
+    const result = await move.run(task, nextDateKey(today))
     if (!result.ok) onFailed(result.error)
   }
 
@@ -39,6 +47,15 @@ export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
         onClick={() => void onChangeStatus()}
         disabled={status.pending}
       />
+      <button
+        type="button"
+        aria-label={`Move to tomorrow: ${task.title}`}
+        onClick={() => void onMoveToTomorrow()}
+        disabled={move.pending}
+        className="shrink-0 rounded px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+      >
+        Move to tomorrow
+      </button>
       <div className="min-w-0 flex-1">
         <p className="text-gray-900">{task.title}</p>
         <FormError error={error} />
