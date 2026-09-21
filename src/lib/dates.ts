@@ -21,6 +21,14 @@ export function isDateKey(value: string): boolean {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
 }
 
+/** The calendar day after `date`: the first of the next month or year when `date` ends one. */
+export function nextDay(date: DateKey): DateKey {
+  const year = Number(date.slice(0, 4))
+  const month = Number(date.slice(5, 7))
+  const day = Number(date.slice(8, 10))
+  return toDateKey(new Date(year, month - 1, day + 1))
+}
+
 export type DueState = 'none' | 'overdue' | 'today' | 'upcoming'
 
 /** Where a due date sits relative to `today`. DateKeys compare correctly as plain strings. */
