@@ -52,6 +52,11 @@ async function addSubtask(page: Page, taskTitle: string, subtaskTitle: string): 
   await expect(input, 'the new subtask was saved').toHaveValue('', SERVER_CONFIRMED)
 }
 
+// Two of the spec's criteria have no test here, and are left to implementation and review:
+//  - "a move that cannot be completed leaves the task in its source list with its subtasks": these tests share one
+//    database and drive the UI only, so a failure can't be forced from the UI without disturbing other tests.
+//  - "with no other list, a task row shows no move control": every test runs as e2e-owner, who always owns the
+//    fixture's lists, so the case can't be reached without changing the fixture.
 test.describe('move a task to another list', () => {
   test("AC1: a task row offers the user's other lists to move it to, and no one else's", async ({ page }) => {
     await page.goto('/lists/list-groceries')
