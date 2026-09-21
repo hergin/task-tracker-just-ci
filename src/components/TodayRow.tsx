@@ -1,7 +1,7 @@
-import { setTaskStatus, type ListedTask } from '../data/tasks'
+import { setTaskDueDate, setTaskStatus, type ListedTask } from '../data/tasks'
 import type { DateKey } from '../data/types'
 import { useAction } from '../hooks/useAction'
-import { dueState } from '../lib/dates'
+import { dueState, nextDay } from '../lib/dates'
 import type { ResultError } from '../lib/result'
 import { nextStatus } from '../lib/tasks'
 import { FormError } from './FormError'
@@ -18,13 +18,20 @@ type Props = {
   onFailed: (error: ResultError) => void
 }
 
-/** One task on the Today page: the button that advances its status, its title, and its due information. */
+/** One task on the Today page: the buttons that advance its status and push it to tomorrow, its title and its due information. */
 export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
   const status = useAction(setTaskStatus)
+  const push = useAction(setTaskDueDate)
 
   async function onChangeStatus() {
     onStart()
     const result = await status.run(task, nextStatus(task.status))
+    if (!result.ok) onFailed(result.error)
+  }
+
+  async function onPush() {
+    onStart()
+    const result = await push.run(task, nextDay(today))
     if (!result.ok) onFailed(result.error)
   }
 
@@ -39,6 +46,16 @@ export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
         onClick={() => void onChangeStatus()}
         disabled={status.pending}
       />
+      {/* Same rule for the push: only this task's own change disables its button. */}
+      <button
+        type="button"
+        aria-label={`Push "${task.title}" to tomorrow`}
+        onClick={() => void onPush()}
+        disabled={push.pending}
+        className="shrink-0 rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+      >
+        Tomorrow
+      </button>
       <div className="min-w-0 flex-1">
         <p className="text-gray-900">{task.title}</p>
         <FormError error={error} />
