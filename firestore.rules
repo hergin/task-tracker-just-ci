@@ -134,8 +134,10 @@ service cloud.firestore {
               && data.position is number;
           }
 
+          // getAfter, not get: moving a task to another list writes the task and its subtasks in one batch,
+          // so the task a new subtask belongs to may only exist once that batch has been committed.
           allow create: if signedIn()
-            && get(/databases/$(database)/documents/lists/$(listId)/tasks/$(taskId)).data.ownerId == uid()
+            && getAfter(/databases/$(database)/documents/lists/$(listId)/tasks/$(taskId)).data.ownerId == uid()
             && validSubtask(request.resource.data)
             && request.resource.data.ownerId == uid()
             && request.resource.data.createdAt == request.time;

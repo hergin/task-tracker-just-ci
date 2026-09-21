@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareLists } from '../../src/lib/lists'
+import { compareLists, otherLists } from '../../src/lib/lists'
 
 describe('compareLists', () => {
   it('orders lists oldest first', () => {
@@ -15,5 +15,16 @@ describe('compareLists', () => {
       { id: 'x', createdAt },
     ]
     expect(lists.sort(compareLists).map((list) => list.id)).toEqual(['x', 'y'])
+  })
+})
+
+describe('otherLists', () => {
+  it('leaves out the list a task is already in', () => {
+    const lists = [{ id: 'groceries' }, { id: 'work' }, { id: 'empty' }]
+    expect(otherLists(lists, 'work').map((list) => list.id)).toEqual(['groceries', 'empty'])
+  })
+
+  it('offers nothing when the user has only the list they are looking at', () => {
+    expect(otherLists([{ id: 'groceries' }], 'groceries')).toEqual([])
   })
 })

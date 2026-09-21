@@ -1,7 +1,30 @@
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
-import { FIXED_TIME, createRulesEnv, dbAs, newSubtask, seed, storedList, storedProfile, storedSubtask, storedTask } from './setup'
+import {
+  FIXED_TIME,
+  createRulesEnv,
+  dbAs,
+  newSubtask,
+  newTask,
+  seed,
+  storedList,
+  storedProfile,
+  storedSubtask,
+  storedTask,
+} from './setup'
 
 let env: RulesTestEnvironment
 
@@ -83,6 +106,28 @@ describe('subtasks: creating', () => {
 
   it('createdAt must be the server time', async () => {
     await assertFails(setDoc(doc(dbAs(env, 'alice'), aliceSubtask('new')), newSubtask('alice', { createdAt: FIXED_TIME })))
+  })
+
+  it('a subtask can be created in the same batch as its task, as moving a task to another list does', async () => {
+    const alice = dbAs(env, 'alice')
+    const batch = writeBatch(alice)
+    batch.set(doc(alice, 'lists/alice-list/tasks/moved'), newTask('alice'))
+    batch.set(doc(alice, 'lists/alice-list/tasks/moved/subtasks/moved-subtask'), newSubtask('alice'))
+    await assertSucceeds(batch.commit())
+  })
+
+  it('a subtask cannot be created under a task that does not exist', async () => {
+    await assertFails(
+      setDoc(doc(dbAs(env, 'alice'), 'lists/alice-list/tasks/ghost/subtasks/new'), newSubtask('alice')),
+    )
+  })
+
+  it("a user cannot add a subtask to someone else's task by creating that task in the same batch", async () => {
+    const alice = dbAs(env, 'alice')
+    const batch = writeBatch(alice)
+    batch.set(doc(alice, 'lists/bob-list/tasks/sneaked'), newTask('alice'))
+    batch.set(doc(alice, 'lists/bob-list/tasks/sneaked/subtasks/new'), newSubtask('alice'))
+    await assertFails(batch.commit())
   })
 })
 
