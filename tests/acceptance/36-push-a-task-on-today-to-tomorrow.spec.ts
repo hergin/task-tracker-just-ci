@@ -174,8 +174,12 @@ test.describe('push a task on Today to tomorrow', () => {
     await expectTodaySaved(page)
 
     await page.goto(listUrl)
-    const tasks = page.getByRole('list', { name: 'Tasks', exact: true })
-    await expect(tasks.getByRole('listitem')).toHaveText([/Alpha/, /Beta/, /Gamma/])
+    // The task rows only: a row's tags are a list of their own nested inside it, whose items are listitems too.
+    const taskRows = page
+      .getByRole('list', { name: 'Tasks', exact: true })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('button', { name: /^(?:To do|Doing|Done|Postponed): change status of / }) })
+    await expect(taskRows).toHaveText([/Alpha/, /Beta/, /Gamma/])
     await expect(page.getByRole('button', { name: 'Doing: change status of Beta', exact: true })).toBeVisible()
     const beta = taskRow(page, 'Beta')
     await expect(beta).toContainText('Ring the bell.')
