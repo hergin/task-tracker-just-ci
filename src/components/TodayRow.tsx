@@ -1,7 +1,7 @@
-import { setTaskStatus, type ListedTask } from '../data/tasks'
+import { setTaskDueDate, setTaskStatus, type ListedTask } from '../data/tasks'
 import type { DateKey } from '../data/types'
 import { useAction } from '../hooks/useAction'
-import { dueState } from '../lib/dates'
+import { dueState, nextDateKey } from '../lib/dates'
 import type { ResultError } from '../lib/result'
 import { nextStatus } from '../lib/tasks'
 import { FormError } from './FormError'
@@ -18,13 +18,20 @@ type Props = {
   onFailed: (error: ResultError) => void
 }
 
-/** One task on the Today page: the button that advances its status, its title, and its due information. */
+/** One task on the Today page: the buttons that advance its status and push it to tomorrow, its title, and its due information. */
 export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
   const status = useAction(setTaskStatus)
+  const push = useAction(setTaskDueDate)
 
   async function onChangeStatus() {
     onStart()
     const result = await status.run(task, nextStatus(task.status))
+    if (!result.ok) onFailed(result.error)
+  }
+
+  async function onPush() {
+    onStart()
+    const result = await push.run(task, nextDateKey(today))
     if (!result.ok) onFailed(result.error)
   }
 
@@ -46,6 +53,16 @@ export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
       <span className={`shrink-0 text-sm ${overdue ? 'font-medium text-red-700' : 'text-gray-500'}`}>
         {overdue ? `Overdue since ${task.dueDate}` : 'Due today'}
       </span>
+      {/* As with the status button, only this task's own push disables it: the other rows keep working. */}
+      <button
+        type="button"
+        aria-label={`Push to tomorrow: ${task.title}`}
+        onClick={() => void onPush()}
+        disabled={push.pending}
+        className="shrink-0 text-sm text-blue-700 hover:underline disabled:opacity-50"
+      >
+        Tomorrow
+      </button>
     </li>
   )
 }
