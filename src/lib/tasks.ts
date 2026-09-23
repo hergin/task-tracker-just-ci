@@ -150,6 +150,11 @@ export function countOpenTasksByList(tasks: readonly Pick<Task, 'listId' | 'stat
   return counts
 }
 
+/** "1 done task" or "3 done tasks", as the clear-done confirmation and its notice name them. */
+export function doneTaskCount(count: number): string {
+  return `${count} done ${count === 1 ? 'task' : 'tasks'}`
+}
+
 /** The position for a task added at the end of a list. */
 export function nextPosition(tasks: readonly Pick<Task, 'position'>[]): number {
   return tasks.reduce((max, task) => Math.max(max, task.position + 1), 0)

@@ -5,6 +5,7 @@ import {
   compareTasks,
   completedAtChange,
   countOpenTasksByList,
+  doneTaskCount,
   filterByStatus,
   filterByTag,
   groupDueByToday,
@@ -290,6 +291,17 @@ describe('countOpenTasksByList', () => {
 
   it('leaves out lists whose tasks are all done', () => {
     expect(countOpenTasksByList([task({ listId: 'archive', status: 'done' })])).toEqual({})
+  })
+})
+
+describe('doneTaskCount', () => {
+  it('keeps "task" singular for one', () => {
+    expect(doneTaskCount(1)).toBe('1 done task')
+  })
+
+  it('makes "tasks" plural for anything else', () => {
+    expect(doneTaskCount(0)).toBe('0 done tasks')
+    expect(doneTaskCount(3)).toBe('3 done tasks')
   })
 })
 

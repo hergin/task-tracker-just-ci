@@ -19,6 +19,7 @@ import {
   compareTasks,
   completedAtChange,
   countOpenTasksByList,
+  isOpen,
   normalizeTaskEdit,
   type TaskEditInput,
 } from '../lib/tasks'
@@ -138,18 +139,41 @@ export function setTaskStatus(task: TaskKey & Pick<Task, 'status'>, status: Task
 /** Firestore allows at most 500 writes in one batch. */
 const BATCH_LIMIT = 500
 
-/** Deletes a task and its subtasks: Firestore never deletes a subcollection by itself (deleteList does the same). */
+/** Deletes one task's subtasks: Firestore never deletes a subcollection by itself (deleteList does the same). */
+async function deleteSubtasksOf(task: TaskKey & Pick<Task, 'ownerId'>): Promise<void> {
+  const subtasks = await getDocs(
+    query(collection(db, 'lists', task.listId, 'tasks', task.id, 'subtasks'), where('ownerId', '==', task.ownerId)),
+  )
+  for (let start = 0; start < subtasks.docs.length; start += BATCH_LIMIT) {
+    const batch = writeBatch(db)
+    for (const subtask of subtasks.docs.slice(start, start + BATCH_LIMIT)) batch.delete(subtask.ref)
+    await batch.commit()
+  }
+}
+
+/** Deletes a task and its subtasks. */
 export async function deleteTask(task: TaskKey & Pick<Task, 'ownerId'>): Promise<Result<void>> {
   return attempt(async () => {
-    const subtasks = await getDocs(
-      query(collection(db, 'lists', task.listId, 'tasks', task.id, 'subtasks'), where('ownerId', '==', task.ownerId)),
-    )
-    for (let start = 0; start < subtasks.docs.length; start += BATCH_LIMIT) {
+    await deleteSubtasksOf(task)
+    await deleteDoc(taskRef(task))
+  })
+}
+
+/**
+ * Deletes every done task in a list, and each of their subtasks. Which tasks are done is read now, not taken from
+ * what the page was showing (deleteList reads its tasks the same way). Returns how many tasks were deleted.
+ */
+export async function clearDoneTasks(listId: string, uid: string): Promise<Result<{ deleted: number }>> {
+  return attempt(async () => {
+    const tasks = await getDocs(query(collection(db, 'lists', listId, 'tasks'), where('ownerId', '==', uid)))
+    const done = tasks.docs.filter((task) => !isOpen(taskFromSnapshot(task)))
+    for (const task of done) await deleteSubtasksOf({ id: task.id, listId, ownerId: uid })
+    for (let start = 0; start < done.length; start += BATCH_LIMIT) {
       const batch = writeBatch(db)
-      for (const subtask of subtasks.docs.slice(start, start + BATCH_LIMIT)) batch.delete(subtask.ref)
+      for (const task of done.slice(start, start + BATCH_LIMIT)) batch.delete(task.ref)
       await batch.commit()
     }
-    await deleteDoc(taskRef(task))
+    return { deleted: done.length }
   })
 }
 

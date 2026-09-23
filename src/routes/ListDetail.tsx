@@ -5,12 +5,13 @@ import { Loading } from '../components/Loading'
 import { TaskRow } from '../components/TaskRow'
 import { useCurrentUser } from '../data/auth'
 import { shareList, useList } from '../data/lists'
-import { addTask, moveTask, useTasks, type ListedTask } from '../data/tasks'
+import { addTask, clearDoneTasks, moveTask, useTasks, type ListedTask } from '../data/tasks'
 import { LIMITS } from '../data/types'
 import { useUsers } from '../data/users'
 import { useAction } from '../hooks/useAction'
 import { toDateKey } from '../lib/dates'
 import {
+  doneTaskCount,
   filterByStatus,
   filterByTag,
   moveTaskByDirection,
@@ -45,10 +46,12 @@ export function ListDetail() {
   const add = useAction(addTask)
   const move = useAction(moveTask)
   const share = useAction(shareList)
+  const clearDone = useAction(clearDoneTasks)
   const [title, setTitle] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
   const [showDone, setShowDone] = useState(false)
+  const [confirmingClearDone, setConfirmingClearDone] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null)
   const titleId = useId()
@@ -140,6 +143,13 @@ export function ListDetail() {
     if (!changes) return
     setMovingTaskId(movedTaskId)
     void move.run(changes)
+  }
+
+  async function onClearDone() {
+    const result = await clearDone.run(listId, user.uid)
+    if (!result.ok) return
+    setConfirmingClearDone(false)
+    setNotice(`Deleted ${doneTaskCount(result.data.deleted)}.`)
   }
 
   function onEditTask(taskId: string) {
@@ -307,16 +317,52 @@ export function ListDetail() {
 
       {!isFiltering && done.length > 0 && (
         <section className="mt-6">
-          <button
-            type="button"
-            aria-expanded={showDone}
-            aria-controls={doneListId}
-            onClick={() => setShowDone(!showDone)}
-            className="text-sm font-medium text-gray-700 hover:underline"
-          >
-            <span aria-hidden="true">{showDone ? '▾' : '▸'} </span>
-            Done ({done.length})
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              aria-expanded={showDone}
+              aria-controls={doneListId}
+              onClick={() => setShowDone(!showDone)}
+              className="text-sm font-medium text-gray-700 hover:underline"
+            >
+              <span aria-hidden="true">{showDone ? '▾' : '▸'} </span>
+              Done ({done.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingClearDone(true)}
+              className="text-sm text-red-700 hover:underline"
+            >
+              Clear done
+            </button>
+          </div>
+          {confirmingClearDone && (
+            <div className="mt-2 rounded bg-red-50 px-3 py-2">
+              <p className="text-gray-900">Delete {doneTaskCount(done.length)}? This can't be undone.</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void onClearDone()}
+                  disabled={clearDone.pending}
+                  className="rounded bg-red-700 px-3 py-1 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50"
+                >
+                  Delete done tasks
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearDone.reset()
+                    setConfirmingClearDone(false)
+                  }}
+                  disabled={clearDone.pending}
+                  className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+              <FormError error={clearDone.error} />
+            </div>
+          )}
           <ul
             id={doneListId}
             aria-label="Done tasks"
