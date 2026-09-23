@@ -1,0 +1,73 @@
+# deploy-production: deploys main to production (scripts/deploy-production.ts).
+# Runs on every push to main, which is only ever a merged pull request, and on demand.
+#
+# Not the pipeline's business: by the time this runs the work has merged and the driver has stopped following
+# it. Its result is read by nobody, so a deployment that fails is a red run here and nothing more.
+name: deploy-production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Deploys run one at a time and are never cancelled halfway: a newer merge waits for the current deploy rather
+# than interrupting it partway through Hosting or rules.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # The Firestore emulator the Security Rules tests run on needs Java 21 or newer.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: npm ci
+
+      # main is green already; this is the last gate before it reaches people, and costs a couple of minutes.
+      - name: Lint, typecheck and unit tests
+        run: npm run verify
+
+      - name: Cache the Firebase emulator downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Security Rules tests
+        run: npm run test:rules
+
+      - name: Production service account key
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::The FIREBASE_SERVICE_ACCOUNT_PROD secret is not set. See 'Production' in .env.example."; exit 1; fi
+          printf '%s' "$KEY" > "$RUNNER_TEMP/production-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/production-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Deploy to production
+        id: deploy
+        env:
+          FIREBASE_PROJECT_ID_PROD: ${{ vars.FIREBASE_PROJECT_ID_PROD }}
+          FIREBASE_PROJECT_ID_STAGING: ${{ vars.FIREBASE_PROJECT_ID_STAGING }}
+          FIREBASE_WEB_CONFIG_PROD: ${{ vars.FIREBASE_WEB_CONFIG_PROD }}
+        run: npx tsx scripts/deploy-production.ts
