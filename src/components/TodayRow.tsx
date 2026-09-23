@@ -1,7 +1,7 @@
-import { setTaskStatus, type ListedTask } from '../data/tasks'
+import { setTaskDueDate, setTaskStatus, type ListedTask } from '../data/tasks'
 import type { DateKey } from '../data/types'
 import { useAction } from '../hooks/useAction'
-import { dueState } from '../lib/dates'
+import { dueState, nextDay } from '../lib/dates'
 import type { ResultError } from '../lib/result'
 import { nextStatus } from '../lib/tasks'
 import { FormError } from './FormError'
@@ -12,20 +12,30 @@ type Props = {
   today: DateKey
   /** This task's last refused change, kept by the page: a row that leaves Today loses its own state. */
   error: ResultError | null
-  /** Called when the user clicks the button, to drop the error the last attempt left on this task. */
+  /** Called when the user clicks a button, to drop the error the last attempt left on this task. */
   onStart: () => void
-  /** Called when the server refuses this task's change, so the page reports it even once the row is gone. */
-  onFailed: (error: ResultError) => void
+  /**
+   * Called once the server has answered this task's change, with the error when it refused it, so the page
+   * reports it even once the row is gone.
+   */
+  onSettled: (error: ResultError | null) => void
 }
 
 /** One task on the Today page: the button that advances its status, its title, and its due information. */
-export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
+export function TodayRow({ task, today, error, onStart, onSettled }: Props) {
   const status = useAction(setTaskStatus)
+  const push = useAction(setTaskDueDate)
 
   async function onChangeStatus() {
     onStart()
     const result = await status.run(task, nextStatus(task.status))
-    if (!result.ok) onFailed(result.error)
+    onSettled(result.ok ? null : result.error)
+  }
+
+  async function onMoveToTomorrow() {
+    onStart()
+    const result = await push.run(task, nextDay(today))
+    onSettled(result.ok ? null : result.error)
   }
 
   const overdue = dueState(task.dueDate, today) === 'overdue'
@@ -46,6 +56,15 @@ export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
       <span className={`shrink-0 text-sm ${overdue ? 'font-medium text-red-700' : 'text-gray-500'}`}>
         {overdue ? `Overdue since ${task.dueDate}` : 'Due today'}
       </span>
+      {/* As with the status button, only this task's own move disables it, whatever date it is due now. */}
+      <button
+        type="button"
+        onClick={() => void onMoveToTomorrow()}
+        disabled={push.pending}
+        className="shrink-0 rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+      >
+        Move to tomorrow
+      </button>
     </li>
   )
 }

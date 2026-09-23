@@ -25,7 +25,7 @@ import {
 import { requiredText } from '../lib/text'
 import { taskFromSnapshot } from './converters'
 import { attempt } from './errors'
-import { LIMITS, type Task, type TaskStatus } from './types'
+import { LIMITS, type DateKey, type Task, type TaskStatus } from './types'
 
 /** A task as listed on its list page. `saving` is true while the server hasn't confirmed a change to it yet. */
 export type ListedTask = Task & { saving: boolean }
@@ -133,6 +133,11 @@ export function setTaskStatus(task: TaskKey & Pick<Task, 'status'>, status: Task
       change === 'keep' ? { status } : { status, completedAt: change === 'set' ? serverTimestamp() : null },
     ),
   )
+}
+
+/** Sets a task's due date, leaving every other field as it is. */
+export function setTaskDueDate(task: TaskKey, dueDate: DateKey): Promise<Result<void>> {
+  return attempt(() => updateDoc(taskRef(task), { dueDate }))
 }
 
 /** Firestore allows at most 500 writes in one batch. */
