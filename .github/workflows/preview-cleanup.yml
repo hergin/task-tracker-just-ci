@@ -1,0 +1,64 @@
+# preview-cleanup: when a pull request closes, delete its Hosting channel. The channels expire on their own
+# after 30 days, so this is tidiness rather than a leak — but a stale preview of work that was dropped or
+# merged is a URL someone can still open and believe.
+name: preview-cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+# Shares preview's group, so closing a pull request cancels a deploy that is still running.
+concurrency:
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: cleanup
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # To see whether the pull request was opened again before its preview goes.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Staging service account key
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::The FIREBASE_SERVICE_ACCOUNT_STAGING secret is not set. See 'Preview deployments' in .env.example."; exit 1; fi
+          printf '%s' "$KEY" > "$RUNNER_TEMP/staging-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/staging-service-account.json" >> "$GITHUB_ENV"
+
+      # A pull request closed and opened again a moment later — which is one way to make GitHub notice a push
+      # it missed — must keep its preview. So look again after a minute, and leave a reopened one alone.
+      - name: Is it closed for good?
+        id: closed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          sleep 60
+          state=$(gh pr view "$PR" --json state --jq .state)
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          if [ "$state" != "CLOSED" ]; then echo "#$PR is open again: keeping its preview."; fi
+
+      - name: Delete the preview
+        if: steps.closed.outputs.state == 'CLOSED'
+        env:
+          FIREBASE_PROJECT_ID_STAGING: ${{ vars.FIREBASE_PROJECT_ID_STAGING }}
+          FIREBASE_PROJECT_ID_PROD: ${{ vars.FIREBASE_PROJECT_ID_PROD }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: npx tsx scripts/preview.ts delete --pr "$PR_NUMBER"
