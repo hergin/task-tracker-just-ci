@@ -7,7 +7,9 @@ import {
   countOpenTasksByList,
   filterByStatus,
   filterByTag,
+  groupComingUp,
   groupDueByToday,
+  isComingUp,
   isDueByToday,
   isOpen,
   moveTaskByDirection,
@@ -444,6 +446,67 @@ describe('isDueByToday', () => {
 
   it('excludes done tasks, even when overdue', () => {
     expect(isDueByToday(task({ dueDate: '2026-03-01', status: 'done' }), today)).toBe(false)
+  })
+})
+
+describe('isComingUp', () => {
+  const today = '2026-03-10'
+
+  it('includes open tasks due tomorrow through seven days from today', () => {
+    expect(isComingUp(task({ dueDate: '2026-03-11' }), today)).toBe(true)
+    expect(isComingUp(task({ dueDate: '2026-03-14', status: 'doing' }), today)).toBe(true)
+    expect(isComingUp(task({ dueDate: '2026-03-17' }), today)).toBe(true)
+  })
+
+  it('excludes tasks due further out, due today, overdue, or without a due date', () => {
+    expect(isComingUp(task({ dueDate: '2026-03-18' }), today)).toBe(false)
+    expect(isComingUp(task({ dueDate: today }), today)).toBe(false)
+    expect(isComingUp(task({ dueDate: '2026-03-09' }), today)).toBe(false)
+    expect(isComingUp(task({ dueDate: null }), today)).toBe(false)
+  })
+
+  it('excludes done tasks due within the window', () => {
+    expect(isComingUp(task({ dueDate: '2026-03-11', status: 'done' }), today)).toBe(false)
+  })
+})
+
+describe('groupComingUp', () => {
+  const today = '2026-03-10'
+  const lists = [
+    { id: 'groceries', name: 'Groceries' },
+    { id: 'work', name: 'Work' },
+    { id: 'home', name: 'Home' },
+  ]
+
+  it('keeps only the open tasks coming up in the next seven days', () => {
+    const tasks = [
+      task({ id: 'tomorrow', listId: 'work', dueDate: '2026-03-11' }),
+      task({ id: 'far-edge', listId: 'work', dueDate: '2026-03-17', status: 'postponed' }),
+      task({ id: 'beyond', listId: 'work', dueDate: '2026-03-18' }),
+      task({ id: 'today', listId: 'work', dueDate: today }),
+      task({ id: 'overdue', listId: 'work', dueDate: '2026-03-01' }),
+      task({ id: 'no-date', listId: 'work', dueDate: null }),
+      task({ id: 'done', listId: 'work', dueDate: '2026-03-11', status: 'done' }),
+    ]
+    const groups = groupComingUp(tasks, lists, today)
+    expect(groups.map((group) => group.tasks.map((t) => t.id))).toEqual([['tomorrow', 'far-edge']])
+  })
+
+  it('orders groups by their earliest due date, and tasks by due date, then position', () => {
+    const tasks = [
+      task({ id: 'milk', listId: 'groceries', dueDate: '2026-03-12', position: 0 }),
+      task({ id: 'report', listId: 'work', dueDate: '2026-03-15', position: 0 }),
+      task({ id: 'invoices', listId: 'work', dueDate: '2026-03-11', position: 1 }),
+      task({ id: 'call', listId: 'work', dueDate: '2026-03-15', position: 2 }),
+    ]
+    const groups = groupComingUp(tasks, lists, today)
+    expect(groups.map((group) => group.list.name)).toEqual(['Work', 'Groceries'])
+    expect(groups[0]?.tasks.map((t) => t.id)).toEqual(['invoices', 'report', 'call'])
+  })
+
+  it('leaves out tasks whose list no longer exists', () => {
+    const tasks = [task({ id: 'orphan', listId: 'deleted-list', dueDate: '2026-03-11' })]
+    expect(groupComingUp(tasks, lists, today)).toEqual([])
   })
 })
 
