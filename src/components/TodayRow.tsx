@@ -12,27 +12,30 @@ type Props = {
   today: DateKey
   /** This task's last refused change, kept by the page: a row that leaves Today loses its own state. */
   error: ResultError | null
-  /** Called when the user clicks the button, to drop the error the last attempt left on this task. */
+  /** Called when the user clicks a button, to drop the error the last attempt left on this task. */
   onStart: () => void
-  /** Called when the server refuses this task's change, so the page reports it even once the row is gone. */
-  onFailed: (error: ResultError) => void
+  /**
+   * Called once the server has answered this task's change, with the error when it refused it, so the page
+   * reports it even once the row is gone.
+   */
+  onSettled: (error: ResultError | null) => void
 }
 
 /** One task on the Today page: the button that advances its status, its title, and its due information. */
-export function TodayRow({ task, today, error, onStart, onFailed }: Props) {
+export function TodayRow({ task, today, error, onStart, onSettled }: Props) {
   const status = useAction(setTaskStatus)
   const push = useAction(setTaskDueDate)
 
   async function onChangeStatus() {
     onStart()
     const result = await status.run(task, nextStatus(task.status))
-    if (!result.ok) onFailed(result.error)
+    onSettled(result.ok ? null : result.error)
   }
 
   async function onMoveToTomorrow() {
     onStart()
     const result = await push.run(task, nextDay(today))
-    if (!result.ok) onFailed(result.error)
+    onSettled(result.ok ? null : result.error)
   }
 
   const overdue = dueState(task.dueDate, today) === 'overdue'

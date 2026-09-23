@@ -9,7 +9,7 @@ import { toDateKey } from '../lib/dates'
 import type { ResultError } from '../lib/result'
 import { groupDueByToday } from '../lib/tasks'
 
-/** A refused status change, by task id: the page keeps it, since a row that leaves Today takes its own state with it. */
+/** A refused change, by task id: the page keeps it, since a row that leaves Today takes its own state with it. */
 type Failure = { title: string; error: ResultError }
 
 /** `/today`: open tasks, across all the user's lists, that are overdue or due today. */
@@ -18,6 +18,9 @@ export function Today() {
   const lists = useLists(user.uid)
   const tasks = useAllTasks(user.uid)
   const [failures, setFailures] = useState<Record<string, Failure>>({})
+  // How many changes are waiting for the server. A change is unsaved from the click on, before Firestore has
+  // even applied it locally, so the indicator can't wait for the first snapshot that reports it as pending.
+  const [inFlight, setInFlight] = useState(0)
 
   if (lists.status === 'loading' || tasks.status === 'loading') return <Loading />
 
@@ -27,11 +30,13 @@ export function Today() {
   // A task marked Done leaves Today at once, so its failure can no longer be shown next to its button.
   const lost = Object.entries(failures).filter(([id]) => !listedIds.has(id))
 
-  function onFailed(task: ListedTask, error: ResultError) {
-    setFailures((current) => ({ ...current, [task.id]: { title: task.title, error } }))
+  function onSettled(task: ListedTask, error: ResultError | null) {
+    setInFlight((count) => count - 1)
+    if (error) setFailures((current) => ({ ...current, [task.id]: { title: task.title, error } }))
   }
 
   function onStart(task: ListedTask) {
+    setInFlight((count) => count + 1)
     setFailures((current) =>
       task.id in current ? Object.fromEntries(Object.entries(current).filter(([id]) => id !== task.id)) : current,
     )
@@ -42,7 +47,7 @@ export function Today() {
       <div className="flex items-baseline justify-between gap-3">
         <h1 className="text-2xl font-semibold text-gray-900">Today</h1>
         {/* A task can leave Today before the server confirms it, so the page carries the indicator, not the row. */}
-        {tasks.data.some((task) => task.saving) && (
+        {(inFlight > 0 || tasks.data.some((task) => task.saving)) && (
           <p role="status" className="text-sm text-gray-500">
             Saving…
           </p>
@@ -77,7 +82,7 @@ export function Today() {
                   today={today}
                   error={failures[task.id]?.error ?? null}
                   onStart={() => onStart(task)}
-                  onFailed={(error) => onFailed(task, error)}
+                  onSettled={(error) => onSettled(task, error)}
                 />
               ))}
             </ul>
