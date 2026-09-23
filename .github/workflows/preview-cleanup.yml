@@ -44,6 +44,9 @@ jobs:
 
       # A pull request closed and opened again a moment later — which is one way to make GitHub notice a push
       # it missed — must keep its preview. So look again after a minute, and leave a reopened one alone.
+      #
+      # Only OPEN means that happened. A pull request that merged reports MERGED, not CLOSED, and testing for
+      # CLOSED read every ordinary merge as a reopening and kept the preview for ever.
       - name: Is it closed for good?
         id: closed
         env:
@@ -53,10 +56,10 @@ jobs:
           sleep 60
           state=$(gh pr view "$PR" --json state --jq .state)
           echo "state=$state" >> "$GITHUB_OUTPUT"
-          if [ "$state" != "CLOSED" ]; then echo "#$PR is open again: keeping its preview."; fi
+          if [ "$state" = "OPEN" ]; then echo "#$PR is open again: keeping its preview."; fi
 
       - name: Delete the preview
-        if: steps.closed.outputs.state == 'CLOSED'
+        if: steps.closed.outputs.state != 'OPEN'
         env:
           FIREBASE_PROJECT_ID_STAGING: ${{ vars.FIREBASE_PROJECT_ID_STAGING }}
           FIREBASE_PROJECT_ID_PROD: ${{ vars.FIREBASE_PROJECT_ID_PROD }}
