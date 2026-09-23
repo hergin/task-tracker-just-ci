@@ -10,6 +10,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "preview:deploy": "tsx scripts/preview.ts deploy",
+    "preview:delete": "tsx scripts/preview.ts delete",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-seed-app",
     "seed": "tsx scripts/seed.ts",
     "lint": "oxlint --deny-warnings",

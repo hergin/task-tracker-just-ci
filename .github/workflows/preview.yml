@@ -1,0 +1,56 @@
+# preview: puts each open pull request on its own Hosting channel in the staging project, so the change can be
+# looked at before it is merged. The URL appears on the pull request as a deployment, updated in place.
+#
+# Nothing here decides anything. ci.yml is the verdict on a pull request; this runs beside it and its result is
+# read by nobody, so a staging account that has expired cannot send working code back to be written again.
+name: preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# One deploy per pull request at a time, and a new push replaces the one in progress rather than racing it.
+# Shared with preview-cleanup, so closing a pull request cancels a deploy that is still running.
+concurrency:
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: preview
+    # Pull requests from forks get no secrets, so they get no preview.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: preview-pr-${{ github.event.pull_request.number }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Staging service account key
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::The FIREBASE_SERVICE_ACCOUNT_STAGING secret is not set. See 'Preview deployments' in .env.example."; exit 1; fi
+          printf '%s' "$KEY" > "$RUNNER_TEMP/staging-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/staging-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Deploy the preview
+        id: deploy
+        env:
+          FIREBASE_PROJECT_ID_STAGING: ${{ vars.FIREBASE_PROJECT_ID_STAGING }}
+          FIREBASE_PROJECT_ID_PROD: ${{ vars.FIREBASE_PROJECT_ID_PROD }}
+          FIREBASE_WEB_CONFIG_STAGING: ${{ vars.FIREBASE_WEB_CONFIG_STAGING }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: npx tsx scripts/preview.ts deploy --pr "$PR_NUMBER"
