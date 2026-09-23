@@ -1,5 +1,5 @@
 import { LIMITS, TASK_STATUSES, type DateKey, type List, type Task, type TaskStatus } from '../data/types'
-import { dueState, isDateKey } from './dates'
+import { addDays, dueState, isDateKey } from './dates'
 import { err, ok, type Result } from './result'
 import { optionalText, requiredText } from './text'
 
@@ -213,6 +213,29 @@ function compareDueDates(a: Pick<Task, 'dueDate'> | undefined, b: Pick<Task, 'du
   return left < right ? -1 : left > right ? 1 : 0
 }
 
+/** Groups the tasks `include` keeps by list, as the /today page shows them. */
+function groupByList<T extends DueTaskFields>(
+  tasks: readonly T[],
+  lists: readonly Pick<List, 'id' | 'name'>[],
+  include: (task: T) => boolean,
+): DueGroup<T>[] {
+  const byList = new Map<string, T[]>()
+  for (const task of tasks) {
+    if (include(task)) byList.set(task.listId, [...(byList.get(task.listId) ?? []), task])
+  }
+  return lists
+    .flatMap((list) => {
+      const grouped = byList.get(list.id)
+      return grouped ? [{ list, tasks: grouped.sort((a, b) => compareDueDates(a, b) || compareTasks(a, b)) }] : []
+    })
+    .sort(
+      (a, b) =>
+        compareDueDates(a.tasks[0], b.tasks[0]) ||
+        a.list.name.localeCompare(b.list.name, 'en') ||
+        (a.list.id < b.list.id ? -1 : a.list.id > b.list.id ? 1 : 0),
+    )
+}
+
 /**
  * The /today page: open tasks that are overdue or due today, grouped by list. Tasks are ordered by due date, then
  * compareTasks; groups by their earliest due date, then list name. Tasks whose list isn't in `lists` are left out.
@@ -222,21 +245,28 @@ export function groupDueByToday<T extends DueTaskFields>(
   lists: readonly Pick<List, 'id' | 'name'>[],
   today: DateKey,
 ): DueGroup<T>[] {
-  const dueByList = new Map<string, T[]>()
-  for (const task of tasks) {
-    if (isDueByToday(task, today)) dueByList.set(task.listId, [...(dueByList.get(task.listId) ?? []), task])
-  }
-  return lists
-    .flatMap((list) => {
-      const due = dueByList.get(list.id)
-      return due ? [{ list, tasks: due.sort((a, b) => compareDueDates(a, b) || compareTasks(a, b)) }] : []
-    })
-    .sort(
-      (a, b) =>
-        compareDueDates(a.tasks[0], b.tasks[0]) ||
-        a.list.name.localeCompare(b.list.name, 'en') ||
-        (a.list.id < b.list.id ? -1 : a.list.id > b.list.id ? 1 : 0),
-    )
+  return groupByList(tasks, lists, (task) => isDueByToday(task, today))
+}
+
+/** How far past today the /today page's "Coming up" window reaches, in days. */
+export const COMING_UP_DAYS = 7
+
+/**
+ * Whether a task belongs in Today's "Coming up" section: open, and due tomorrow through COMING_UP_DAYS days from
+ * today, both ends included. An overdue task or one due today stays in the overdue-or-due-today section.
+ */
+export function isComingUp(task: Pick<Task, 'status' | 'dueDate'>, today: DateKey): boolean {
+  if (!isOpen(task) || task.dueDate === null) return false
+  return task.dueDate > today && task.dueDate <= addDays(today, COMING_UP_DAYS)
+}
+
+/** The /today page's "Coming up" section: the tasks isComingUp keeps, grouped and ordered as groupDueByToday does. */
+export function groupComingUp<T extends DueTaskFields>(
+  tasks: readonly T[],
+  lists: readonly Pick<List, 'id' | 'name'>[],
+  today: DateKey,
+): DueGroup<T>[] {
+  return groupByList(tasks, lists, (task) => isComingUp(task, today))
 }
 
 type SearchableTaskFields = Pick<Task, 'id' | 'listId' | 'title' | 'notes' | 'position' | 'createdAt'>
