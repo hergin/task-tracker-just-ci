@@ -76,9 +76,14 @@ export async function renameList(listId: string, name: string): Promise<Result<v
   return attempt(() => updateDoc(doc(db, 'lists', listId), { name: valid.data }))
 }
 
-/** Turns on the read-only share link for a list the signed-in user owns. There is no way back. */
+/** Turns on the read-only share link for a list the signed-in user owns. */
 export function shareList(listId: string): Promise<Result<void>> {
   return attempt(() => updateDoc(doc(db, 'lists', listId), { shared: true }))
+}
+
+/** Turns the share link off again: the list keeps its id, so sharing it again gives the same link. */
+export function unshareList(listId: string): Promise<Result<void>> {
+  return attempt(() => updateDoc(doc(db, 'lists', listId), { shared: false }))
 }
 
 /**
