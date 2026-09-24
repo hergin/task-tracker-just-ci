@@ -134,8 +134,11 @@ service cloud.firestore {
               && data.position is number;
           }
 
+          // Checked against the list, not the parent task: moving a task to another list writes the task and its
+          // subtasks in one batch, and inside that batch the new task isn't visible to a get() yet. A task's ownerId
+          // always equals its list's (the task create and update rules enforce it), so this permits the same writes.
           allow create: if signedIn()
-            && get(/databases/$(database)/documents/lists/$(listId)/tasks/$(taskId)).data.ownerId == uid()
+            && get(/databases/$(database)/documents/lists/$(listId)).data.ownerId == uid()
             && validSubtask(request.resource.data)
             && request.resource.data.ownerId == uid()
             && request.resource.data.createdAt == request.time;
