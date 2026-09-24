@@ -118,6 +118,21 @@ describe('lists: changing', () => {
     await assertFails(updateDoc(doc(dbAs(env, 'bob'), 'lists/alice-list'), { shared: true }))
   })
 
+  it('the owner can stop sharing their list', async () => {
+    await seed(env, { 'lists/alice-shared': storedList('alice', { shared: true }) })
+    await assertSucceeds(updateDoc(doc(dbAs(env, 'alice'), 'lists/alice-shared'), { shared: false }))
+  })
+
+  it("another user cannot stop sharing someone else's list", async () => {
+    await seed(env, { 'lists/alice-shared': storedList('alice', { shared: true }) })
+    await assertFails(updateDoc(doc(dbAs(env, 'bob'), 'lists/alice-shared'), { shared: false }))
+  })
+
+  it('a signed-out visitor cannot stop sharing a list shared to them', async () => {
+    await seed(env, { 'lists/alice-shared': storedList('alice', { shared: true }) })
+    await assertFails(updateDoc(doc(dbAs(env, null), 'lists/alice-shared'), { shared: false }))
+  })
+
   it('a signed-out visitor cannot share a list, even one already shared to them', async () => {
     await seed(env, { 'lists/alice-shared': storedList('alice', { shared: true }) })
     await assertFails(updateDoc(doc(dbAs(env, null), 'lists/alice-shared'), { name: 'Renamed' }))

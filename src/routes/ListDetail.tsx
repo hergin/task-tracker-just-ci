@@ -4,7 +4,7 @@ import { FormError } from '../components/FormError'
 import { Loading } from '../components/Loading'
 import { TaskRow } from '../components/TaskRow'
 import { useCurrentUser } from '../data/auth'
-import { shareList, useList, useLists } from '../data/lists'
+import { shareList, unshareList, useList, useLists } from '../data/lists'
 import { addTask, moveTask, moveTaskToList, useTasks, type ListedTask } from '../data/tasks'
 import { LIMITS, type List } from '../data/types'
 import { useUsers } from '../data/users'
@@ -47,6 +47,7 @@ export function ListDetail() {
   const move = useAction(moveTask)
   const moveToList = useAction(moveTaskToList)
   const share = useAction(shareList)
+  const unshare = useAction(unshareList)
   const [title, setTitle] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
@@ -222,7 +223,8 @@ export function ListDetail() {
       </div>
       <p className="mt-1 text-sm text-gray-500">Created {toDateKey(list.data.createdAt)}</p>
 
-      {list.data.shared && !share.pending ? (
+      {/* The block only changes once the server has confirmed the change, so each button appearing is proof. */}
+      {(list.data.shared || unshare.pending) && !share.pending ? (
         <div className="mt-4">
           <label htmlFor={shareLinkId} className="block text-sm font-medium text-gray-700">
             Share link
@@ -235,6 +237,15 @@ export function ListDetail() {
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-700"
           />
           <p className="mt-1 text-sm text-gray-500">Anyone with this link can see this list's tasks without signing in.</p>
+          <button
+            type="button"
+            onClick={() => void unshare.run(listId)}
+            disabled={unshare.pending}
+            className="mt-2 rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          >
+            Stop sharing
+          </button>
+          <FormError error={unshare.error} />
         </div>
       ) : (
         <div className="mt-4">
