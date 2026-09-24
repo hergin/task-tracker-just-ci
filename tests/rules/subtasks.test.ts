@@ -1,7 +1,30 @@
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
-import { FIXED_TIME, createRulesEnv, dbAs, newSubtask, seed, storedList, storedProfile, storedSubtask, storedTask } from './setup'
+import {
+  FIXED_TIME,
+  createRulesEnv,
+  dbAs,
+  newSubtask,
+  newTask,
+  seed,
+  storedList,
+  storedProfile,
+  storedSubtask,
+  storedTask,
+} from './setup'
 
 let env: RulesTestEnvironment
 
@@ -61,6 +84,20 @@ describe('subtasks: reading', () => {
 describe('subtasks: creating', () => {
   it('the task owner can add a subtask', async () => {
     await assertSucceeds(setDoc(doc(dbAs(env, 'alice'), aliceSubtask('new')), newSubtask('alice')))
+  })
+
+  // Moving a task to another list (#51) writes the task and its subtasks into the destination and deletes the originals
+  // in one atomic batch. Inside that batch the new task is not yet visible to a rule's get(), so the subtask create rule
+  // has to check the destination list's ownerId instead of the new task's.
+  it('a subtask can be created in the same batch as its task, the way moving a task to another list does', async () => {
+    await seed(env, { 'lists/alice-other': storedList('alice') })
+    const alice = dbAs(env, 'alice')
+    const batch = writeBatch(alice)
+    batch.set(doc(alice, 'lists/alice-other/tasks/moved'), newTask('alice'))
+    batch.set(doc(alice, 'lists/alice-other/tasks/moved/subtasks/moved-subtask'), newSubtask('alice'))
+    batch.delete(doc(alice, aliceSubtask('open-subtask')))
+    batch.delete(doc(alice, 'lists/alice-list/tasks/alice-task'))
+    await assertSucceeds(batch.commit())
   })
 
   it("a user cannot add a subtask to someone else's task, even claiming to own the subtask", async () => {
