@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { deleteTask, setTaskStatus, type ListedTask } from '../data/tasks'
-import type { DateKey, UserProfile } from '../data/types'
+import type { DateKey, List, UserProfile } from '../data/types'
 import { useAction } from '../hooks/useAction'
 import { dueState } from '../lib/dates'
 import type { ResultError } from '../lib/result'
@@ -8,6 +9,7 @@ import { FormError } from './FormError'
 import { StatusButton } from './StatusButton'
 import { Subtasks } from './Subtasks'
 import { TaskEditForm } from './TaskEditForm'
+import { TaskMoveForm } from './TaskMoveForm'
 
 type Props = {
   task: ListedTask
@@ -26,6 +28,14 @@ type Props = {
   onDropTask: (draggedTaskId: string) => void
   /** The error from this task's last move attempt, if any. */
   moveError: ResultError | null
+  /** The lists this task can be moved to: the user's own lists apart from this one. Empty hides the Move control. */
+  otherLists: readonly List[]
+  /** Moves this task, with its subtasks, to another of the user's lists. */
+  onMoveToList: (destination: List) => void
+  /** Whether a move to another list is still waiting on the server. */
+  moveToListPending: boolean
+  /** The error from this task's last move to another list, if any. */
+  moveToListError: ResultError | null
   /** Whether this is the first task shown in its group: hides the "Move … up" tap button. */
   isFirst: boolean
   /** Whether this is the last task shown in its group: hides the "Move … down" tap button. */
@@ -52,6 +62,10 @@ export function TaskRow({
   onMove,
   onDropTask,
   moveError,
+  otherLists,
+  onMoveToList,
+  moveToListPending,
+  moveToListError,
   isFirst,
   isLast,
   canReorder,
@@ -62,6 +76,8 @@ export function TaskRow({
 }: Props) {
   const status = useAction(setTaskStatus)
   const remove = useAction(deleteTask)
+  // The move form closes with the row itself: a confirmed move takes this task off the page.
+  const [moving, setMoving] = useState(false)
 
   if (editing) {
     return (
@@ -145,7 +161,16 @@ export function TaskRow({
             ))}
           </ul>
         )}
-        <FormError error={status.error ?? remove.error ?? moveError} />
+        <FormError error={status.error ?? remove.error ?? moveError ?? moveToListError} />
+        {moving && otherLists.length > 0 && (
+          <TaskMoveForm
+            task={task}
+            lists={otherLists}
+            onMove={onMoveToList}
+            onCancel={() => setMoving(false)}
+            pending={moveToListPending}
+          />
+        )}
         <Subtasks
           uid={uid}
           listId={task.listId}
@@ -159,6 +184,16 @@ export function TaskRow({
       <button type="button" aria-label={`Edit ${task.title}`} onClick={onEdit} className="text-sm text-blue-700 hover:underline">
         Edit
       </button>
+      {otherLists.length > 0 && (
+        <button
+          type="button"
+          aria-label={`Move ${task.title}`}
+          onClick={() => setMoving(true)}
+          className="text-sm text-blue-700 hover:underline"
+        >
+          Move
+        </button>
+      )}
       <button
         type="button"
         aria-label={`Delete ${task.title}`}

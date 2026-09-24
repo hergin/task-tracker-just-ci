@@ -4,9 +4,9 @@ import { FormError } from '../components/FormError'
 import { Loading } from '../components/Loading'
 import { TaskRow } from '../components/TaskRow'
 import { useCurrentUser } from '../data/auth'
-import { shareList, useList } from '../data/lists'
-import { addTask, moveTask, useTasks, type ListedTask } from '../data/tasks'
-import { LIMITS } from '../data/types'
+import { shareList, useList, useLists } from '../data/lists'
+import { addTask, moveTask, moveTaskToList, useTasks, type ListedTask } from '../data/tasks'
+import { LIMITS, type List } from '../data/types'
 import { useUsers } from '../data/users'
 import { useAction } from '../hooks/useAction'
 import { toDateKey } from '../lib/dates'
@@ -40,10 +40,12 @@ export function ListDetail() {
   const [searchParams, setSearchParams] = useSearchParams()
   const user = useCurrentUser()
   const list = useList(listId, user.uid)
+  const lists = useLists(user.uid)
   const tasks = useTasks(listId, user.uid)
   const users = useUsers()
   const add = useAction(addTask)
   const move = useAction(moveTask)
+  const moveToList = useAction(moveTaskToList)
   const share = useAction(shareList)
   const [title, setTitle] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -51,6 +53,7 @@ export function ListDetail() {
   const [showDone, setShowDone] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null)
+  const [movingToListTaskId, setMovingToListTaskId] = useState<string | null>(null)
   const titleId = useId()
   const doneListId = useId()
   const statusFilterName = useId()
@@ -107,7 +110,14 @@ export function ListDetail() {
     )
   }
 
-  if (list.status === 'loading' || tasks.status === 'loading' || users.status === 'loading') return <Loading />
+  if (
+    list.status === 'loading' ||
+    lists.status === 'loading' ||
+    tasks.status === 'loading' ||
+    users.status === 'loading'
+  ) {
+    return <Loading />
+  }
 
   if (list.data === null) {
     return (
@@ -121,6 +131,7 @@ export function ListDetail() {
   }
 
   const allTasks = tasks.data
+  const otherLists = lists.data.filter((other) => other.id !== listId)
   const { open, done } = splitByDone(allTasks)
   const orderedOpen = orderTasks(open, taskOrder)
   const today = toDateKey(new Date())
@@ -140,6 +151,13 @@ export function ListDetail() {
     if (!changes) return
     setMovingTaskId(movedTaskId)
     void move.run(changes)
+  }
+
+  async function onMoveToList(task: ListedTask, destination: List) {
+    setMovingToListTaskId(task.id)
+    setNotice(null)
+    const result = await moveToList.run(task, destination.id)
+    if (result.ok) setNotice(`Moved "${task.title}" to "${destination.name}".`)
   }
 
   function onEditTask(taskId: string) {
@@ -173,6 +191,10 @@ export function ListDetail() {
           )
         }
         moveError={movingTaskId === task.id ? move.error : null}
+        otherLists={otherLists}
+        onMoveToList={(destination) => void onMoveToList(task, destination)}
+        moveToListPending={moveToList.pending}
+        moveToListError={movingToListTaskId === task.id ? moveToList.error : null}
         isFirst={index === 0}
         isLast={index === group.length - 1}
         canReorder={canReorder}
@@ -190,8 +212,9 @@ export function ListDetail() {
       </Link>
       <div className="mt-2 flex items-baseline justify-between gap-3">
         <h1 className="text-2xl font-semibold text-gray-900">{list.data.name}</h1>
-        {/* Tests wait for this to disappear before reloading: until then, the server hasn't confirmed every change. */}
-        {allTasks.some((task) => task.saving) && (
+        {/* Tests wait for this to disappear before reloading: until then, the server hasn't confirmed every change.
+            A move to another list takes its task off this page as soon as it is sent, so it reports itself. */}
+        {(allTasks.some((task) => task.saving) || moveToList.pending) && (
           <p role="status" className="text-sm text-gray-500">
             Saving…
           </p>

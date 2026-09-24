@@ -19,11 +19,12 @@ import {
   compareTasks,
   completedAtChange,
   countOpenTasksByList,
+  nextPosition,
   normalizeTaskEdit,
   type TaskEditInput,
 } from '../lib/tasks'
 import { requiredText } from '../lib/text'
-import { taskFromSnapshot } from './converters'
+import { subtaskFromSnapshot, taskFromSnapshot } from './converters'
 import { attempt } from './errors'
 import { LIMITS, type Task, type TaskStatus } from './types'
 
@@ -150,6 +151,50 @@ export async function deleteTask(task: TaskKey & Pick<Task, 'ownerId'>): Promise
       await batch.commit()
     }
     await deleteDoc(taskRef(task))
+  })
+}
+
+/**
+ * Moves a task and its subtasks to another of the user's lists, at the end of it. One atomic batch writes the
+ * copies and deletes the originals, so a failure can never leave the task in both lists or in neither; the batch
+ * fails outright past BATCH_LIMIT writes, which a task would need more than 249 subtasks to reach. The copies get
+ * fresh timestamps: neither createdAt nor completedAt is shown anywhere.
+ */
+export async function moveTaskToList(task: Task, destinationListId: string): Promise<Result<void>> {
+  return attempt(async () => {
+    const subtasks = await getDocs(
+      query(collection(db, 'lists', task.listId, 'tasks', task.id, 'subtasks'), where('ownerId', '==', task.ownerId)),
+    )
+    const destinationTasks = await getDocs(
+      query(collection(db, 'lists', destinationListId, 'tasks'), where('ownerId', '==', task.ownerId)),
+    )
+    const movedRef = doc(collection(db, 'lists', destinationListId, 'tasks'))
+    const batch = writeBatch(db)
+    batch.set(movedRef, {
+      ownerId: task.ownerId,
+      title: task.title,
+      notes: task.notes,
+      status: task.status,
+      dueDate: task.dueDate,
+      assigneeId: task.assigneeId,
+      position: nextPosition(destinationTasks.docs.map(taskFromSnapshot)),
+      createdAt: serverTimestamp(),
+      completedAt: task.status === 'done' ? serverTimestamp() : null,
+      tags: task.tags,
+    })
+    for (const subtask of subtasks.docs) {
+      const moved = subtaskFromSnapshot(subtask)
+      batch.set(doc(collection(movedRef, 'subtasks')), {
+        ownerId: moved.ownerId,
+        title: moved.title,
+        done: moved.done,
+        position: moved.position,
+        createdAt: serverTimestamp(),
+      })
+      batch.delete(subtask.ref)
+    }
+    batch.delete(taskRef(task))
+    await batch.commit()
   })
 }
 
