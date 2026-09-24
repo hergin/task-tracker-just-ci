@@ -13,6 +13,7 @@ import {
   moveTaskByDirection,
   nextPosition,
   nextStatus,
+  normalizeDueDate,
   normalizeTaskEdit,
   orderTasks,
   parseStatusFilter,
@@ -200,6 +201,23 @@ describe('filterByTag', () => {
 
   it('matches nothing for a tag no task carries', () => {
     expect(filterByTag(tasks, 'missing')).toEqual([])
+  })
+})
+
+describe('normalizeDueDate', () => {
+  it('turns an empty field into no due date', () => {
+    expect(normalizeDueDate('  ')).toEqual({ ok: true, data: null })
+  })
+
+  it('keeps a real date, trimmed', () => {
+    expect(normalizeDueDate(' 2026-10-03 ')).toEqual({ ok: true, data: '2026-10-03' })
+  })
+
+  it('refuses anything that is not a real date', () => {
+    expect(normalizeDueDate('52026-12-04')).toEqual({
+      ok: false,
+      error: { code: 'invalid', message: 'Due date must be a real date.' },
+    })
   })
 })
 

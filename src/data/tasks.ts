@@ -20,6 +20,7 @@ import {
   completedAtChange,
   countOpenTasksByList,
   nextPosition,
+  normalizeDueDate,
   normalizeTaskEdit,
   type TaskEditInput,
 } from '../lib/tasks'
@@ -89,19 +90,23 @@ export type NewTask = {
   uid: string
   listId: string
   title: string
+  /** The new-task form's due date field, as typed: empty for a task with no due date. */
+  dueDate: string
   position: number
 }
 
-export async function addTask({ uid, listId, title, position }: NewTask): Promise<Result<{ id: string }>> {
+export async function addTask({ uid, listId, title, dueDate, position }: NewTask): Promise<Result<{ id: string }>> {
   const valid = requiredText(title, LIMITS.taskTitle, 'Task title')
   if (!valid.ok) return valid
+  const validDueDate = normalizeDueDate(dueDate)
+  if (!validDueDate.ok) return validDueDate
   return attempt(async () => {
     const ref = await addDoc(collection(db, 'lists', listId, 'tasks'), {
       ownerId: uid,
       title: valid.data,
       notes: null,
       status: 'todo',
-      dueDate: null,
+      dueDate: validDueDate.data,
       assigneeId: null,
       position,
       createdAt: serverTimestamp(),
