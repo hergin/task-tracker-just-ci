@@ -49,6 +49,7 @@ export function ListDetail() {
   const share = useAction(shareList)
   const unshare = useAction(unshareList)
   const [title, setTitle] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
   const [showDone, setShowDone] = useState(false)
@@ -56,6 +57,7 @@ export function ListDetail() {
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null)
   const [movingToListTaskId, setMovingToListTaskId] = useState<string | null>(null)
   const titleId = useId()
+  const newTaskDueDateId = useId()
   const doneListId = useId()
   const statusFilterName = useId()
   const taskOrderName = useId()
@@ -144,8 +146,11 @@ export function ListDetail() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setNotice(null)
-    const result = await add.run({ uid: user.uid, listId, title, position: nextPosition(allTasks) })
-    if (result.ok) setTitle('')
+    const result = await add.run({ uid: user.uid, listId, title, dueDate, position: nextPosition(allTasks) })
+    if (result.ok) {
+      setTitle('')
+      setDueDate('')
+    }
   }
 
   function runMove(changes: ListedTask[] | null, movedTaskId: string) {
@@ -261,18 +266,33 @@ export function ListDetail() {
         </div>
       )}
 
-      <form onSubmit={(event) => void onSubmit(event)} className="mt-4">
-        <label htmlFor={titleId} className="block text-sm font-medium text-gray-700">
-          New task
-        </label>
-        <div className="mt-1 flex gap-2">
-          <input
-            id={titleId}
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            maxLength={LIMITS.taskTitle}
-            className="flex-1 rounded border border-gray-300 px-3 py-2"
-          />
+      {/* Named, so the page's other "Due date" control (the Order by radio) can be told apart from this field. */}
+      <form aria-label="Add task" onSubmit={(event) => void onSubmit(event)} className="mt-4">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-1">
+            <label htmlFor={titleId} className="block text-sm font-medium text-gray-700">
+              New task
+            </label>
+            <input
+              id={titleId}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={LIMITS.taskTitle}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+            />
+          </div>
+          <div>
+            <label htmlFor={newTaskDueDateId} className="block text-sm font-medium text-gray-700">
+              Due date
+            </label>
+            <input
+              id={newTaskDueDateId}
+              type="date"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+              className="mt-1 rounded border border-gray-300 px-3 py-2"
+            />
+          </div>
           <button
             type="submit"
             disabled={add.pending}

@@ -106,6 +106,17 @@ export function orderTasks<T extends DueDateOrderFields>(tasks: readonly T[], or
   return order === 'due-date' ? [...tasks].sort(compareByDueDate) : [...tasks]
 }
 
+/**
+ * A due date as typed on a form: empty becomes null, anything else must be a real date. The same rule for the
+ * edit form and the new-task form.
+ */
+export function normalizeDueDate(input: string): Result<DateKey | null> {
+  const dueDate = input.trim()
+  if (dueDate === '') return ok(null)
+  if (!isDateKey(dueDate)) return err('invalid', 'Due date must be a real date.')
+  return ok(dueDate)
+}
+
 /** The task edit form's fields, as typed. */
 export type TaskEditInput = { title: string; notes: string; dueDate: string; assigneeId: string; tags: string[] }
 
@@ -117,12 +128,12 @@ export function normalizeTaskEdit(input: TaskEditInput): Result<TaskEditFields> 
   if (!title.ok) return title
   const notes = optionalText(input.notes, LIMITS.taskNotes, 'Notes')
   if (!notes.ok) return notes
-  const dueDate = input.dueDate.trim()
-  if (dueDate !== '' && !isDateKey(dueDate)) return err('invalid', 'Due date must be a real date.')
+  const dueDate = normalizeDueDate(input.dueDate)
+  if (!dueDate.ok) return dueDate
   return ok({
     title: title.data,
     notes: notes.data,
-    dueDate: dueDate === '' ? null : dueDate,
+    dueDate: dueDate.data,
     assigneeId: input.assigneeId === '' ? null : input.assigneeId,
     tags: input.tags,
   })
